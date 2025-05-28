@@ -25,6 +25,7 @@ internal class App : Application() {
         _scanner = RealBLEScanner(
             coroutineScope = coroutineScope,
             default = contexts.default,
+            context = this,
         )
     }
 

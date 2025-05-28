@@ -14,12 +14,12 @@ import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
 
 abstract class BLEScannerService(
-    context: CoroutineContext,
+    main: CoroutineContext,
     private val scanner: BLEScanner,
     private val channel: NotificationChannel,
 ) : Service() {
     private val job = SupervisorJob()
-    private val coroutineScope = CoroutineScope(context + job)
+    private val coroutineScope = CoroutineScope(main + job)
     private val N_ID: Int = System.currentTimeMillis().toInt()
 
     override fun onCreate() {
@@ -41,13 +41,18 @@ abstract class BLEScannerService(
                         nm.notify(N_ID, notification)
                         startForeground(N_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
                     }
-                    false -> {
-                        stopSelf()
-                    }
-                    null -> {
-                        stopForeground(STOP_FOREGROUND_REMOVE)
-                    }
+                    false -> stopSelf()
+                    null -> stopForeground(STOP_FOREGROUND_REMOVE)
                 }
+            }
+        }
+        coroutineScope.launch {
+            scanner.errors.collect { error ->
+                val broadcast = Intent("scanner:errors")
+                broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
+                broadcast.putExtra("type", error::class.java.name)
+                broadcast.putExtra("message", error.message)
+                sendBroadcast(broadcast)
             }
         }
     }

@@ -18,10 +18,27 @@ import androidx.core.content.ContextCompat
 internal class MainActivity : ComponentActivity() {
     private var button: TextView? = null
 
+    private val filters = IntentFilter().also {
+        it.addAction("scanner:status")
+        it.addAction("scanner:errors")
+    }
     private val receivers = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             println("[MainActivity]:receivers:onReceive($intent)")
-            onStarted(started = intent?.extras?.get("started") as? Boolean)
+            when (intent?.action) {
+                "scanner:status" -> {
+                    onStarted(started = intent.extras?.get("started") as? Boolean)
+                }
+                "scanner:errors" -> {
+                    val message = """
+                        scanner error:
+                        type: ${intent.getStringExtra("type")}
+                        message: ${intent.getStringExtra("message")}
+                    """.trimIndent()
+                    showToast(message = message)
+                    println(message) // todo
+                }
+            }
         }
     }
 
@@ -92,7 +109,7 @@ internal class MainActivity : ComponentActivity() {
         ContextCompat.registerReceiver(
             context,
             receivers,
-            IntentFilter("scanner:status"),
+            filters,
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         val intent = Intent(context, ScannerService::class.java)

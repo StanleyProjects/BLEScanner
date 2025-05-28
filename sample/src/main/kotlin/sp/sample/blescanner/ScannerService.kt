@@ -10,7 +10,7 @@ import androidx.core.app.NotificationCompat
 import sp.ax.blescanner.BLEScannerService
 
 internal class ScannerService : BLEScannerService(
-    context = App.contexts.main,
+    main = App.contexts.main,
     scanner = App.scanner,
     channel = NotificationChannel(
         "a539c7d9-eaee-438f-aeb0-f966a7f2348e",
