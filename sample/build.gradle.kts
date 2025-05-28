@@ -1,4 +1,11 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import sp.gx.core.buildDir
+import sp.gx.core.camelCase
+import sp.gx.core.create
+import sp.gx.core.map
+import sp.gx.core.qn
+import sp.gx.core.string
+import sp.gx.core.xml
 
 repositories {
     google()
@@ -50,6 +57,32 @@ androidComponents.onVariants { variant ->
         }
         tasks.getByName<KotlinCompile>("compile${variant.name.capitalize()}Kotlin") {
             kotlinOptions.jvmTarget = Version.jvmTarget
+        }
+        val checkManifestTask = tasks.create("checkManifest", variant.name) {
+            dependsOn(camelCase("compile", variant.name, "Sources"))
+            doLast {
+                val actual = layout.buildDir()
+                    .dir("intermediates/merged_manifests/${variant.name}")
+                    .dir(camelCase("process", variant.name, "Manifest"))
+                    .xml("AndroidManifest.xml")
+                    .map("uses-permission".qn()) {
+                        it.string("{http://schemas.android.com/apk/res/android}name".qn())
+                    }
+                val expected = setOf(
+                    "android.permission.ACCESS_COARSE_LOCATION",
+                    "android.permission.ACCESS_FINE_LOCATION",
+                    "android.permission.FOREGROUND_SERVICE",
+                    "android.permission.FOREGROUND_SERVICE_LOCATION",
+                    "android.permission.POST_NOTIFICATIONS",
+                    "${variant.applicationId.get()}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+                )
+                check(actual.sorted() == expected.sorted()) {
+                    "Actual is:\n$actual\nbut expected is:\n$expected"
+                }
+            }
+        }
+        tasks.getByName(camelCase("assemble", variant.name)) {
+            dependsOn(checkManifestTask)
         }
     }
 }

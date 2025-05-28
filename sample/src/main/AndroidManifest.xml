@@ -1,4 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
     <application
         android:label="BLEScanner sample"
         android:name=".App">
@@ -11,6 +17,7 @@
             </intent-filter>
         </activity>
         <service android:name=".ScannerService"
-            android:exported="false"/>
+            android:exported="false"
+            android:foregroundServiceType="location"/>
     </application>
 </manifest>
