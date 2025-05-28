@@ -1,7 +1,7 @@
 /*
-!/sample
-!/lib
 !/buildSrc
+!/lib
+!/sample
 !.gitignore
 !build.gradle.kts
 !gradle.properties
