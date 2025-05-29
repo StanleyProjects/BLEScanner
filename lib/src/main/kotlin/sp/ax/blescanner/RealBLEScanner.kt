@@ -10,7 +10,6 @@ import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.os.Build
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -53,15 +52,19 @@ class RealBLEScanner(
     private fun startScan(callback: ScanCallback) {
         val bm = context.getSystemService(BluetoothManager::class.java)
         val adapter = bm.adapter ?: TODO("RealBLEScanner:startScan:no adapter!")
-        if (!adapter.isEnabled) TODO("RealBLEScanner:startScan:adapter disabled!")
+        if (!adapter.isEnabled) {
+            throw BLEScannerException(type = BLEScannerException.Type.BTDisabled)
+        }
         val lm = context.getSystemService(LocationManager::class.java)
-        if (!lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) TODO("RealBLEScanner:startScan:gps disabled!")
+        if (!lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            throw BLEScannerException(type = BLEScannerException.Type.GPSDisabled)
+        }
         if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            TODO("RealBLEScanner:startScan:no gps permission!")
+            throw SecurityException("no permission: ${Manifest.permission.ACCESS_FINE_LOCATION}")
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (context.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
-                TODO("RealBLEScanner:startScan:no bluetooth permission!")
+                throw SecurityException("no permission: ${Manifest.permission.BLUETOOTH_SCAN}")
             }
         }
         val scanner = adapter.bluetoothLeScanner ?: TODO("RealBLEScanner:startScan:no scanner!")
@@ -96,7 +99,7 @@ class RealBLEScanner(
     private fun stopScan(callback: ScanCallback) {
         val bm = context.getSystemService(BluetoothManager::class.java)
         val adapter = bm.adapter ?: TODO("RealBLEScanner:stopScan:no adapter!")
-        if (!adapter.isEnabled) TODO("RealBLEScanner:stopScan:adapter disabled!")
+        if (!adapter.isEnabled) return // todo
         val scanner = adapter.bluetoothLeScanner ?: TODO("RealBLEScanner:stopScan:no scanner!")
         scanner.stopScan(callback)
     }

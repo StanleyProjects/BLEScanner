@@ -59,8 +59,11 @@ abstract class BLEScannerService(
             scanner.errors.collect { error ->
                 val broadcast = Intent("scanner:errors")
                 broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
-                broadcast.putExtra("type", error::class.java.name)
+                broadcast.putExtra("name", error::class.java.name)
                 broadcast.putExtra("message", error.message)
+                if (error is BLEScannerException) {
+                    broadcast.putExtra("type", error.type.name)
+                }
                 sendBroadcast(broadcast)
             }
         }
@@ -75,10 +78,10 @@ abstract class BLEScannerService(
         when (intent?.action) {
             "start" -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                    val error = IllegalStateException("no permission: ${Manifest.permission.POST_NOTIFICATIONS}")
+                    val error = SecurityException("no permission: ${Manifest.permission.POST_NOTIFICATIONS}")
                     val broadcast = Intent("scanner:errors")
                     broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
-                    broadcast.putExtra("type", error::class.java.name)
+                    broadcast.putExtra("name", error::class.java.name)
                     broadcast.putExtra("message", error.message)
                     sendBroadcast(broadcast)
                 } else {
