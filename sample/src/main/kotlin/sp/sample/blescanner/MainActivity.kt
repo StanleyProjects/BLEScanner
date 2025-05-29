@@ -14,20 +14,25 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.core.content.ContextCompat
+import sp.ax.blescanner.BLEScanner
 
 internal class MainActivity : ComponentActivity() {
     private var button: TextView? = null
 
     private val filters = IntentFilter().also {
-        it.addAction("scanner:status")
+        it.addAction("scanner:state")
         it.addAction("scanner:errors")
     }
     private val receivers = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             println("[MainActivity]:receivers:onReceive($intent)")
             when (intent?.action) {
-                "scanner:status" -> {
-                    onStarted(started = intent.extras?.get("started") as? Boolean)
+                "scanner:state" -> {
+                    val started = when (intent.getStringExtra("state")) {
+                        BLEScanner.State.Started.name -> true
+                        else -> false
+                    }
+                    onStarted(started = started)
                 }
                 "scanner:errors" -> {
                     val message = """
@@ -60,6 +65,8 @@ internal class MainActivity : ComponentActivity() {
                         requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 1)
                     } else if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                         requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+                    } else if (checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+                        requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_SCAN), 1)
                     } else {
                         val intent = Intent(context, ScannerService::class.java)
                         intent.action = "start"
@@ -113,7 +120,7 @@ internal class MainActivity : ComponentActivity() {
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         val intent = Intent(context, ScannerService::class.java)
-        intent.action = "status"
+        intent.action = "state"
         startService(intent)
     }
 }

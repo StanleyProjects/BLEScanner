@@ -9,6 +9,7 @@ import android.content.pm.ServiceInfo
 import android.os.IBinder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
@@ -29,20 +30,25 @@ abstract class BLEScannerService(
             nm.createNotificationChannel(channel)
         }
         coroutineScope.launch {
-            scanner.started.drop(1).collect { started ->
-                println("[BLEScannerService]:scanner.started: $started") // todo
-                val broadcast = Intent("scanner:status")
+            scanner.states.collect { state ->
+                val broadcast = Intent("scanner:state")
                 broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
-                broadcast.putExtra("started", started)
+                broadcast.putExtra("state", state.name)
                 sendBroadcast(broadcast)
-                when (started) {
-                    true -> {
+            }
+        }
+        coroutineScope.launch {
+            scanner.events.collect { event ->
+                when (event) {
+                    BLEScanner.Event.OnStop -> {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        stopSelf()
+                    }
+                    BLEScanner.Event.OnStart -> {
                         val notification = onStartNotification(channel = channel)
                         nm.notify(N_ID, notification)
                         startForeground(N_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
                     }
-                    false -> stopSelf()
-                    null -> stopForeground(STOP_FOREGROUND_REMOVE)
                 }
             }
         }
@@ -66,10 +72,10 @@ abstract class BLEScannerService(
         when (intent?.action) {
             "start" -> scanner.start()
             "stop" -> scanner.stop()
-            "status" -> {
-                val broadcast = Intent("scanner:status")
+            "state" -> {
+                val broadcast = Intent("scanner:state")
                 broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
-                broadcast.putExtra("started", scanner.started.value)
+                broadcast.putExtra("state", scanner.states.value.name)
                 sendBroadcast(broadcast)
             }
         }

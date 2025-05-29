@@ -4,7 +4,20 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
 interface BLEScanner {
-    val started: StateFlow<Boolean?>
+    enum class State {
+        Started,
+        Starting,
+        Stopping,
+        Stopped,
+    }
+
+    enum class Event {
+        OnStop,
+        OnStart,
+    }
+
+    val states: StateFlow<State>
+    val events: SharedFlow<Event>
     val errors: SharedFlow<Throwable>
 
     fun start()

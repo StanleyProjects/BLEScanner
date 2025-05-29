@@ -71,6 +71,7 @@ androidComponents.onVariants { variant ->
                 val expected = setOf(
                     "android.permission.ACCESS_COARSE_LOCATION",
                     "android.permission.ACCESS_FINE_LOCATION",
+                    "android.permission.BLUETOOTH_SCAN",
                     "android.permission.FOREGROUND_SERVICE",
                     "android.permission.FOREGROUND_SERVICE_LOCATION",
                     "android.permission.POST_NOTIFICATIONS",

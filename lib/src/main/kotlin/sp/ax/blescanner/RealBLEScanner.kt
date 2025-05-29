@@ -26,11 +26,14 @@ class RealBLEScanner(
     private val default: CoroutineContext,
     private val context: Context,
 ) : BLEScanner {
-    private val _started = MutableStateFlow<Boolean?>(false)
-    override val started = _started.asStateFlow()
+    private val _states = MutableStateFlow<BLEScanner.State>(BLEScanner.State.Stopped)
+    override val states = _states.asStateFlow()
 
     private val _errors = MutableSharedFlow<Throwable>()
     override val errors = _errors.asSharedFlow()
+
+    private val _events = MutableSharedFlow<BLEScanner.Event>()
+    override val events = _events.asSharedFlow()
 
     private val mutex = Mutex()
     private val scanCallback = AtomicReference<InternalScanCallback?>(null)
@@ -63,17 +66,18 @@ class RealBLEScanner(
     }
 
     private suspend fun start(callback: InternalScanCallback) {
-        if (started.value != false) return // todo
-        _started.value = null
+        if (states.value != BLEScanner.State.Stopped) return // todo
+        _states.value = BLEScanner.State.Starting
         try {
             startScan(callback = callback)
         } catch (error: Throwable) {
-            _started.value = false
+            _states.value = BLEScanner.State.Stopped
             _errors.emit(error)
             return
         }
         scanCallback.set(callback)
-        _started.value = true
+        _states.value = BLEScanner.State.Started
+        _events.emit(BLEScanner.Event.OnStart)
     }
 
     override fun start() {
@@ -87,7 +91,7 @@ class RealBLEScanner(
         }
     }
 
-    private fun stopScan(callback: InternalScanCallback) {
+    private fun stopScan(callback: ScanCallback) {
         val bm = context.getSystemService(BluetoothManager::class.java)
         val adapter = bm.adapter ?: TODO("RealBLEScanner:stopScan:no adapter!")
         if (!adapter.isEnabled) TODO("RealBLEScanner:stopScan:adapter disabled!")
@@ -96,19 +100,18 @@ class RealBLEScanner(
     }
 
     private suspend fun stopScan() {
-        if (started.value != true) return // todo
-        _started.value = null
+        if (states.value != BLEScanner.State.Started) return // todo
+        _states.value = BLEScanner.State.Stopping
         val callback = scanCallback.getAndSet(null)
-        if (callback == null) {
-            // todo
-        } else {
+        if (callback != null) {
             try {
                 stopScan(callback = callback)
             } catch (error: Throwable) {
                 _errors.emit(error)
             }
         }
-        _started.value = false
+        _states.value = BLEScanner.State.Stopped
+        _events.emit(BLEScanner.Event.OnStop)
     }
 
     override fun stop() {
