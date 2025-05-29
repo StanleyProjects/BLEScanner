@@ -19,6 +19,16 @@ import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.flowWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.trySendBlocking
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import sp.ax.blescanner.BLEScanner
 import sp.ax.blescanner.BLEScannerException
 
@@ -132,6 +142,26 @@ internal class MainActivity : ComponentActivity() {
         }
     }
 
+    private val intents = callbackFlow<Intent> {
+        val context: Context = this@MainActivity
+        val receivers = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                println("[MainActivity]:intents:onReceive($intent)")
+                if (intent != null) trySendBlocking(intent)
+            }
+        }
+        println("[MainActivity]:registerReceiver($receivers)")
+        ContextCompat.registerReceiver(
+            context,
+            receivers,
+            filters,
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        awaitClose {
+            context.unregisterReceiver(receivers)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val context: Context = this
@@ -151,26 +181,80 @@ internal class MainActivity : ComponentActivity() {
             root.addView(it)
         }
         setContentView(root)
+        lifecycleScope.launch {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                intents.collect { intent ->
+                    println("[MainActivity]:intents:onEach($intent)")
+                    when (intent.action) {
+                        "scanner:state" -> {
+                            val started = when (intent.getStringExtra("state")) {
+                                BLEScanner.State.Started.name -> true
+                                else -> false
+                            }
+                            onStarted(started = started)
+                        }
+                        "scanner:errors" -> {
+                            when (val name = intent.getStringExtra("name")) {
+                                SecurityException::class.java.name -> {
+                                    requestPermissions()
+                                }
+                                BLEScannerException::class.java.name -> {
+                                    when (BLEScannerException.Type.valueOf(intent.getStringExtra("type")!!)) {
+                                        BLEScannerException.Type.BTDisabled -> {
+                                            if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                                                requestPermissions()
+                                            } else {
+                                                btLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+                                            }
+                                        }
+                                        BLEScannerException.Type.GPSDisabled -> {
+                                            gpsLauncher.launch(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                                        }
+                                    }
+                                }
+                                else -> {
+                                    val message = """
+                                        scanner error:
+                                        name: $name
+                                        message: ${intent.getStringExtra("message")}
+                                    """.trimIndent()
+                                    showToast(message = message)
+                                    println(message) // todo
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        lifecycleScope.launch {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                println("[MainActivity]:lifecycle:state: ${lifecycle.currentState}")
+                val intent = Intent(context, ScannerService::class.java)
+                intent.action = "state"
+                startService(intent)
+            }
+        }
     }
 
-    override fun onPause() {
-        println("[MainActivity]:onPause")
-        super.onPause()
-        unregisterReceiver(receivers)
-    }
+//    override fun onPause() {
+//        println("[MainActivity]:onPause")
+//        super.onPause()
+//        unregisterReceiver(receivers)
+//    }
 
-    override fun onResume() {
-        println("[MainActivity]:onResume")
-        super.onResume()
-        val context: Context = this
-        ContextCompat.registerReceiver(
-            context,
-            receivers,
-            filters,
-            ContextCompat.RECEIVER_NOT_EXPORTED,
-        )
-        val intent = Intent(context, ScannerService::class.java)
-        intent.action = "state"
-        startService(intent)
-    }
+//    override fun onResume() {
+//        println("[MainActivity]:onResume")
+//        super.onResume()
+//        val context: Context = this
+//        ContextCompat.registerReceiver(
+//            context,
+//            receivers,
+//            filters,
+//            ContextCompat.RECEIVER_NOT_EXPORTED,
+//        )
+//        val intent = Intent(context, ScannerService::class.java)
+//        intent.action = "state"
+//        startService(intent)
+//    }
 }
