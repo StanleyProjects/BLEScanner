@@ -61,17 +61,20 @@ internal class MainActivity : ComponentActivity() {
             }
             false -> {
                 button.setOnClickListener { _ ->
-                    if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                        requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 1)
-                    } else if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
-                    } else if (checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
-                        requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_SCAN), 1)
-                    } else {
-                        val intent = Intent(context, ScannerService::class.java)
-                        intent.action = "start"
-                        startService(intent)
-                    }
+//                    if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+//                        requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 1)
+//                    } else if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+//                        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+//                    } else if (checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+//                        requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_SCAN), 1)
+//                    } else {
+//                        val intent = Intent(context, ScannerService::class.java)
+//                        intent.action = "start"
+//                        startService(intent)
+//                    }
+                    val intent = Intent(context, ScannerService::class.java)
+                    intent.action = "start"
+                    startService(intent)
                 }
                 button.text = "start"
             }

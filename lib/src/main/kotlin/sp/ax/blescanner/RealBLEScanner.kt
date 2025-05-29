@@ -8,6 +8,7 @@ import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.LocationManager
+import android.os.Build
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -31,9 +32,6 @@ class RealBLEScanner(
 
     private val _errors = MutableSharedFlow<Throwable>()
     override val errors = _errors.asSharedFlow()
-
-    private val _events = MutableSharedFlow<BLEScanner.Event>()
-    override val events = _events.asSharedFlow()
 
     private val mutex = Mutex()
     private val scanCallback = AtomicReference<InternalScanCallback?>(null)
@@ -61,6 +59,11 @@ class RealBLEScanner(
         if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             TODO("RealBLEScanner:startScan:no gps permission!")
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (context.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+                TODO("RealBLEScanner:startScan:no bluetooth permission!")
+            }
+        }
         val scanner = adapter.bluetoothLeScanner ?: TODO("RealBLEScanner:startScan:no scanner!")
         scanner.startScan(scanFilters, scanSettings, callback)
     }
@@ -77,7 +80,6 @@ class RealBLEScanner(
         }
         scanCallback.set(callback)
         _states.value = BLEScanner.State.Started
-        _events.emit(BLEScanner.Event.OnStart)
     }
 
     override fun start() {
@@ -111,7 +113,6 @@ class RealBLEScanner(
             }
         }
         _states.value = BLEScanner.State.Stopped
-        _events.emit(BLEScanner.Event.OnStop)
     }
 
     override fun stop() {

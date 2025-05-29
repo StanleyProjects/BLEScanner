@@ -11,13 +11,7 @@ interface BLEScanner {
         Stopped,
     }
 
-    enum class Event {
-        OnStop,
-        OnStart,
-    }
-
     val states: StateFlow<State>
-    val events: SharedFlow<Event>
     val errors: SharedFlow<Throwable>
 
     fun start()

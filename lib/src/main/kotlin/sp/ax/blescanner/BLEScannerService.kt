@@ -1,15 +1,17 @@
 package sp.ax.blescanner
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
@@ -30,24 +32,25 @@ abstract class BLEScannerService(
             nm.createNotificationChannel(channel)
         }
         coroutineScope.launch {
-            scanner.states.collect { state ->
+            scanner.states.drop(1).collect { state ->
                 val broadcast = Intent("scanner:state")
                 broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
                 broadcast.putExtra("state", state.name)
                 sendBroadcast(broadcast)
-            }
-        }
-        coroutineScope.launch {
-            scanner.events.collect { event ->
-                when (event) {
-                    BLEScanner.Event.OnStop -> {
-                        stopForeground(STOP_FOREGROUND_REMOVE)
-                        stopSelf()
-                    }
-                    BLEScanner.Event.OnStart -> {
+                when (state) {
+                    BLEScanner.State.Started -> {
                         val notification = onStartNotification(channel = channel)
                         nm.notify(N_ID, notification)
                         startForeground(N_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+                    }
+                    BLEScanner.State.Starting -> {
+                        // noop
+                    }
+                    BLEScanner.State.Stopping -> {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                    }
+                    BLEScanner.State.Stopped -> {
+                        stopSelf()
                     }
                 }
             }
@@ -70,7 +73,18 @@ abstract class BLEScannerService(
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         println("[BLEScannerService]:onStartCommand($intent)") // todo
         when (intent?.action) {
-            "start" -> scanner.start()
+            "start" -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    val error = IllegalStateException("no permission: ${Manifest.permission.POST_NOTIFICATIONS}")
+                    val broadcast = Intent("scanner:errors")
+                    broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
+                    broadcast.putExtra("type", error::class.java.name)
+                    broadcast.putExtra("message", error.message)
+                    sendBroadcast(broadcast)
+                } else {
+                    scanner.start()
+                }
+            }
             "stop" -> scanner.stop()
             "state" -> {
                 val broadcast = Intent("scanner:state")
