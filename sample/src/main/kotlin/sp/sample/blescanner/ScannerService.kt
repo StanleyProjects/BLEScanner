@@ -21,7 +21,7 @@ internal class ScannerService : BLEScannerService(
     override fun onStartNotification(channel: NotificationChannel): Notification {
         val context: Context = this
         val intent = Intent(context, ScannerService::class.java)
-        intent.action = "stop"
+        intent.action = BLEScannerStopAction
         val stopIntent = PendingIntent.getService(context, 1, intent, PendingIntent.FLAG_IMMUTABLE)
         val action = NotificationCompat.Action.Builder(-1, "stop", stopIntent)
             .build()

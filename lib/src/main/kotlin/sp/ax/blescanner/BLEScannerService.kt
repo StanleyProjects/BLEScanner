@@ -5,20 +5,13 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
-import android.content.BroadcastReceiver
-import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.channels.trySendBlocking
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
@@ -77,9 +70,8 @@ abstract class BLEScannerService(
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        println("[BLEScannerService]:onStartCommand($intent)") // todo
         when (intent?.action) {
-            "start" -> {
+            BLEScannerStartAction -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                     val error = SecurityException("no permission: ${Manifest.permission.POST_NOTIFICATIONS}")
                     val broadcast = Intent(BLEScannerErrorsAction)
@@ -90,8 +82,8 @@ abstract class BLEScannerService(
                     scanner.start()
                 }
             }
-            "stop" -> scanner.stop()
-            "state" -> {
+            BLEScannerStopAction -> scanner.stop()
+            BLEScannerStatesAction -> {
                 val broadcast = Intent(BLEScannerStatesAction)
                 broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
                 broadcast.putExtra("state", scanner.states.value.name)
@@ -111,55 +103,7 @@ abstract class BLEScannerService(
     companion object {
         const val BLEScannerStatesAction = "sp.ax.blescanner.BLEScannerStatesAction"
         const val BLEScannerErrorsAction = "sp.ax.blescanner.BLEScannerErrorsAction"
-
-        fun getStatesReceivers(context: Context): Flow<BLEScanner.State> {
-            return callbackFlow {
-                val receivers = object : BroadcastReceiver() {
-                    override fun onReceive(context: Context?, intent: Intent?) {
-                        val state = intent?.getStringExtra("state")?.let { name ->
-                            BLEScanner.State.entries.firstOrNull { it.name == name }
-                        } ?: return
-                        trySendBlocking(state)
-                    }
-                }
-                val filters = IntentFilter(BLEScannerStatesAction)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    context.registerReceiver(
-                        receivers,
-                        filters,
-                        Context.RECEIVER_NOT_EXPORTED,
-                    )
-                } else {
-                    context.registerReceiver(receivers, filters)
-                }
-                awaitClose {
-                    context.unregisterReceiver(receivers)
-                }
-            }
-        }
-
-        fun getErrorsReceivers(context: Context): Flow<Throwable> {
-            return callbackFlow {
-                val receivers = object : BroadcastReceiver() {
-                    override fun onReceive(context: Context?, intent: Intent?) {
-                        val error = intent?.getSerializableExtra("error") as? Throwable ?: return
-                        trySendBlocking(error)
-                    }
-                }
-                val filters = IntentFilter(BLEScannerErrorsAction)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    context.registerReceiver(
-                        receivers,
-                        filters,
-                        Context.RECEIVER_NOT_EXPORTED,
-                    )
-                } else {
-                    context.registerReceiver(receivers, filters)
-                }
-                awaitClose {
-                    context.unregisterReceiver(receivers)
-                }
-            }
-        }
+        const val BLEScannerStartAction = "sp.ax.blescanner.BLEScannerStartAction"
+        const val BLEScannerStopAction = "sp.ax.blescanner.BLEScannerStopAction"
     }
 }

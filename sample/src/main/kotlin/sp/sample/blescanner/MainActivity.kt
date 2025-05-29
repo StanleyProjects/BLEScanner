@@ -22,7 +22,10 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.launch
 import sp.ax.blescanner.BLEScanner
 import sp.ax.blescanner.BLEScannerException
-import sp.ax.blescanner.BLEScannerService
+import sp.ax.blescanner.BLEScannerReceivers
+import sp.ax.blescanner.start
+import sp.ax.blescanner.states
+import sp.ax.blescanner.stop
 
 internal class MainActivity : ComponentActivity() {
     private var button: TextView? = null
@@ -41,10 +44,7 @@ internal class MainActivity : ComponentActivity() {
 
     private val btLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { output ->
         if (output.resultCode == RESULT_OK) {
-            val context: Context = this
-            val intent = Intent(context, ScannerService::class.java)
-            intent.action = "start"
-            startService(intent)
+            start<ScannerService>(context = this)
         }
     }
 
@@ -52,9 +52,7 @@ internal class MainActivity : ComponentActivity() {
         val context: Context = this
         val lm = context.getSystemService(LocationManager::class.java)
         if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            val intent = Intent(context, ScannerService::class.java)
-            intent.action = "start"
-            startService(intent)
+            start<ScannerService>(context = context)
         }
     }
 
@@ -64,17 +62,13 @@ internal class MainActivity : ComponentActivity() {
         when (started) {
             true -> {
                 button.setOnClickListener { _ ->
-                    val intent = Intent(context, ScannerService::class.java)
-                    intent.action = "stop"
-                    startService(intent)
+                    stop<ScannerService>(context = context)
                 }
                 button.text = "stop"
             }
             false -> {
                 button.setOnClickListener { _ ->
-                    val intent = Intent(context, ScannerService::class.java)
-                    intent.action = "start"
-                    startService(intent)
+                    start<ScannerService>(context = context)
                 }
                 button.text = "start"
             }
@@ -104,7 +98,7 @@ internal class MainActivity : ComponentActivity() {
             root.addView(it)
         }
         setContentView(root)
-        val states = BLEScannerService.getStatesReceivers(context = context)
+        val states = BLEScannerReceivers.states(context = context)
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 states.collect { state ->
@@ -116,7 +110,7 @@ internal class MainActivity : ComponentActivity() {
                 }
             }
         }
-        val errors = BLEScannerService.getErrorsReceivers(context = context)
+        val errors = BLEScannerReceivers.errors(context = context)
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 errors.collect { error ->
@@ -151,9 +145,7 @@ internal class MainActivity : ComponentActivity() {
         }
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                val intent = Intent(context, ScannerService::class.java)
-                intent.action = "state"
-                startService(intent)
+                states<ScannerService>(context = context)
             }
         }
     }
