@@ -5,13 +5,20 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.trySendBlocking
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
@@ -33,7 +40,7 @@ abstract class BLEScannerService(
         }
         coroutineScope.launch {
             scanner.states.drop(1).collect { state ->
-                val broadcast = Intent("scanner:state")
+                val broadcast = Intent(BLEScannerStatesAction)
                 broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
                 broadcast.putExtra("state", state.name)
                 sendBroadcast(broadcast)
@@ -57,13 +64,9 @@ abstract class BLEScannerService(
         }
         coroutineScope.launch {
             scanner.errors.collect { error ->
-                val broadcast = Intent("scanner:errors")
+                val broadcast = Intent(BLEScannerErrorsAction)
                 broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
-                broadcast.putExtra("name", error::class.java.name)
-                broadcast.putExtra("message", error.message)
-                if (error is BLEScannerException) {
-                    broadcast.putExtra("type", error.type.name)
-                }
+                broadcast.putExtra("error", error)
                 sendBroadcast(broadcast)
             }
         }
@@ -79,10 +82,9 @@ abstract class BLEScannerService(
             "start" -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                     val error = SecurityException("no permission: ${Manifest.permission.POST_NOTIFICATIONS}")
-                    val broadcast = Intent("scanner:errors")
+                    val broadcast = Intent(BLEScannerErrorsAction)
                     broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
-                    broadcast.putExtra("name", error::class.java.name)
-                    broadcast.putExtra("message", error.message)
+                    broadcast.putExtra("error", error)
                     sendBroadcast(broadcast)
                 } else {
                     scanner.start()
@@ -90,7 +92,7 @@ abstract class BLEScannerService(
             }
             "stop" -> scanner.stop()
             "state" -> {
-                val broadcast = Intent("scanner:state")
+                val broadcast = Intent(BLEScannerStatesAction)
                 broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
                 broadcast.putExtra("state", scanner.states.value.name)
                 sendBroadcast(broadcast)
@@ -105,4 +107,59 @@ abstract class BLEScannerService(
     }
 
     protected abstract fun onStartNotification(channel: NotificationChannel): Notification
+
+    companion object {
+        const val BLEScannerStatesAction = "sp.ax.blescanner.BLEScannerStatesAction"
+        const val BLEScannerErrorsAction = "sp.ax.blescanner.BLEScannerErrorsAction"
+
+        fun getStatesReceivers(context: Context): Flow<BLEScanner.State> {
+            return callbackFlow {
+                val receivers = object : BroadcastReceiver() {
+                    override fun onReceive(context: Context?, intent: Intent?) {
+                        val state = intent?.getStringExtra("state")?.let { name ->
+                            BLEScanner.State.entries.firstOrNull { it.name == name }
+                        } ?: return
+                        trySendBlocking(state)
+                    }
+                }
+                val filters = IntentFilter(BLEScannerStatesAction)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    context.registerReceiver(
+                        receivers,
+                        filters,
+                        Context.RECEIVER_NOT_EXPORTED,
+                    )
+                } else {
+                    context.registerReceiver(receivers, filters)
+                }
+                awaitClose {
+                    context.unregisterReceiver(receivers)
+                }
+            }
+        }
+
+        fun getErrorsReceivers(context: Context): Flow<Throwable> {
+            return callbackFlow {
+                val receivers = object : BroadcastReceiver() {
+                    override fun onReceive(context: Context?, intent: Intent?) {
+                        val error = intent?.getSerializableExtra("error") as? Throwable ?: return
+                        trySendBlocking(error)
+                    }
+                }
+                val filters = IntentFilter(BLEScannerErrorsAction)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    context.registerReceiver(
+                        receivers,
+                        filters,
+                        Context.RECEIVER_NOT_EXPORTED,
+                    )
+                } else {
+                    context.registerReceiver(receivers, filters)
+                }
+                awaitClose {
+                    context.unregisterReceiver(receivers)
+                }
+            }
+        }
+    }
 }
