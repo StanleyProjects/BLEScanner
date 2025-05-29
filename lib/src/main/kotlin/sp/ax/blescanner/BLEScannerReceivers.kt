@@ -60,4 +60,31 @@ object BLEScannerReceivers {
             }
         }
     }
+
+    fun devices(context: Context): Flow<BLEDevice> {
+        return callbackFlow {
+            val receivers = object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    val device = BLEDevice(
+                        name = intent?.getStringExtra("name") ?: return,
+                        address = intent.getStringExtra("address") ?: return,
+                    )
+                    trySendBlocking(device)
+                }
+            }
+            val filters = IntentFilter(BLEScannerService.BLEScannerDevicesAction)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(
+                    receivers,
+                    filters,
+                    Context.RECEIVER_NOT_EXPORTED,
+                )
+            } else {
+                context.registerReceiver(receivers, filters)
+            }
+            awaitClose {
+                context.unregisterReceiver(receivers)
+            }
+        }
+    }
 }

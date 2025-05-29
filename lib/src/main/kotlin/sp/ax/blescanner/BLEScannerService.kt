@@ -63,6 +63,15 @@ abstract class BLEScannerService(
                 sendBroadcast(broadcast)
             }
         }
+        coroutineScope.launch {
+            scanner.devices.collect { device ->
+                val broadcast = Intent(BLEScannerDevicesAction)
+                broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
+                broadcast.putExtra("name", device.name)
+                broadcast.putExtra("address", device.address)
+                sendBroadcast(broadcast)
+            }
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? {
@@ -103,6 +112,7 @@ abstract class BLEScannerService(
     companion object {
         const val BLEScannerStatesAction = "sp.ax.blescanner.BLEScannerStatesAction"
         const val BLEScannerErrorsAction = "sp.ax.blescanner.BLEScannerErrorsAction"
+        const val BLEScannerDevicesAction = "sp.ax.blescanner.BLEScannerDevicesAction"
         const val BLEScannerStartAction = "sp.ax.blescanner.BLEScannerStartAction"
         const val BLEScannerStopAction = "sp.ax.blescanner.BLEScannerStopAction"
     }

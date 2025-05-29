@@ -4,6 +4,7 @@ import android.Manifest
 import android.bluetooth.BluetoothManager
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
+import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
@@ -32,6 +33,9 @@ class RealBLEScanner(
     private val _errors = MutableSharedFlow<Throwable>()
     override val errors = _errors.asSharedFlow()
 
+    private val _devices = MutableSharedFlow<BLEDevice>()
+    override val devices = _devices.asSharedFlow()
+
     private val mutex = Mutex()
     private val scanCallback = AtomicReference<InternalScanCallback?>(null)
 
@@ -46,7 +50,23 @@ class RealBLEScanner(
     private val scanFilters = listOf(ScanFilter.Builder().build())
 
     private inner class InternalScanCallback : ScanCallback() {
-        // todo
+        override fun onScanResult(callbackType: Int, result: ScanResult?) {
+            val device = BLEDevice(
+                name = result?.device?.name ?: return,
+                address = result.device.address ?: return,
+            )
+            coroutineScope.launch {
+                _devices.emit(device)
+            }
+        }
+
+        override fun onBatchScanResults(results: MutableList<ScanResult>?) {
+            TODO("RealBLEScanner:InternalScanCallback:onBatchScanResults($results)")
+        }
+
+        override fun onScanFailed(errorCode: Int) {
+            TODO("RealBLEScanner:InternalScanCallback:onScanFailed($errorCode)")
+        }
     }
 
     private fun startScan(callback: ScanCallback) {

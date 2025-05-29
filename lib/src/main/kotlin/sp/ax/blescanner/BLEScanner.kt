@@ -13,6 +13,7 @@ interface BLEScanner {
 
     val states: StateFlow<State>
     val errors: SharedFlow<Throwable>
+    val devices: SharedFlow<BLEDevice>
 
     fun start()
     fun stop()

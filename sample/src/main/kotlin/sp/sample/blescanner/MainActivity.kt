@@ -143,6 +143,14 @@ internal class MainActivity : ComponentActivity() {
                 }
             }
         }
+        val devices = BLEScannerReceivers.devices(context = context)
+        lifecycleScope.launch {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                devices.collect { device ->
+                    println("[MainActivity]:device: ${device.address} ${device.name}")
+                }
+            }
+        }
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 states<ScannerService>(context = context)
