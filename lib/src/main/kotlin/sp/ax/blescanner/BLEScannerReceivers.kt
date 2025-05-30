@@ -15,7 +15,6 @@ object BLEScannerReceivers {
         return callbackFlow {
             val receivers = object : BroadcastReceiver() {
                 override fun onReceive(context: Context?, intent: Intent?) {
-                    println("[BLEScannerReceivers]:states:onReceive($intent)") // todo
                     val state = intent?.getStringExtra("state")?.let { name ->
                         BLEScanner.State.entries.firstOrNull { it.name == name }
                     } ?: return
@@ -32,9 +31,7 @@ object BLEScannerReceivers {
             } else {
                 context.registerReceiver(receivers, filters)
             }
-            println("[BLEScannerReceivers]:states:registerReceiver") // todo
             awaitClose {
-                println("[BLEScannerReceivers]:states:awaitClose") // todo
                 context.unregisterReceiver(receivers)
             }
         }
