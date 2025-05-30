@@ -106,6 +106,14 @@ internal fun MainScreen() {
         }
     }
     LaunchedEffect(Unit) {
+        val devices = BLEScannerReceivers.devices(context = context)
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            devices.collect { device ->
+                println("[MainScreen]:device: ${device.address} ${device.name}")
+            }
+        }
+    }
+    LaunchedEffect(Unit) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             states<ScannerService>(context = context)
         }
