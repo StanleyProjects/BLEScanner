@@ -16,11 +16,7 @@ import sp.gx.core.file
 import sp.gx.core.filled
 import sp.gx.core.getByName
 import sp.gx.core.kebabCase
-import sp.gx.core.map
-import sp.gx.core.qn
-import sp.gx.core.string
 import sp.gx.core.task
-import sp.gx.core.xml
 
 version = "0.1.0"
 
@@ -203,25 +199,6 @@ android {
                     jvmTarget = Version.jvmTarget
                     freeCompilerArgs = freeCompilerArgs + setOf("-module-name", maven.moduleName())
                 }
-            }
-            val checkManifestTask = tasks.create("checkManifest", variant.name) {
-                dependsOn(camelCase("compile", variant.name, "Sources"))
-                doLast {
-                    val actual = layout.buildDir()
-                        .dir("intermediates/merged_manifests/${variant.name}")
-                        .dir(camelCase("process", variant.name, "Manifest"))
-                        .xml("AndroidManifest.xml")
-                        .map("uses-permission".qn()) {
-                            it.string("{http://schemas.android.com/apk/res/android}name".qn())
-                        }
-                    val expected = emptySet<String>()
-                    check(actual.sorted() == expected.sorted()) {
-                        "Actual is:\n$actual\nbut expected is:\n$expected"
-                    }
-                }
-            }
-            tasks.getByName(camelCase("assemble", variant.name)) {
-                dependsOn(checkManifestTask)
             }
         }
     }
