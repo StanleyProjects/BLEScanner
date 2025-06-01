@@ -34,6 +34,7 @@ import sp.ax.blescanner.BLEScannerReceivers
 import sp.ax.blescanner.start
 import sp.ax.blescanner.states
 import sp.ax.blescanner.stop
+import java.util.Locale
 
 private fun getPermissions(): Array<String> {
     val permissions = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -109,7 +110,9 @@ internal fun MainScreen() {
         val devices = BLEScannerReceivers.devices(context = context)
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             devices.collect { device ->
-                println("[MainScreen]:device: ${device.address} ${device.name}")
+                val n1 = String.format(Locale.US, "%02x", device.bytes[13].toInt() and 0xff)
+                val n2 = device.bytes[18].toInt() and 0xFF shl 8 or (device.bytes[19].toInt() and 0xFF)
+                println("[MainScreen]:device: ${device.address} [13: $n1, $n2] ${device.name}")
             }
         }
     }
