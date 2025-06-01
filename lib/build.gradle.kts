@@ -11,6 +11,7 @@ import sp.gx.core.buildDir
 import sp.gx.core.camelCase
 import sp.gx.core.check
 import sp.gx.core.create
+import sp.gx.core.eff
 import sp.gx.core.existing
 import sp.gx.core.file
 import sp.gx.core.filled
@@ -38,6 +39,7 @@ repositories {
 plugins {
     id("com.android.library")
     id("kotlin-android")
+    id("org.gradle.jacoco")
 }
 
 fun BaseVariant.getVersion(): String {
@@ -148,6 +150,55 @@ fun assembleMetadata(variant: BaseVariant) {
     }
 }
 
+jacoco.toolVersion = Version.jacoco
+
+fun checkCoverage(variant: BaseVariant) {
+    val taskUnitTest = camelCase("test", variant.name, "UnitTest")
+    val executionData = buildDir()
+        .dir("outputs/unit_test_code_coverage/${variant.name}UnitTest")
+        .asFile("$taskUnitTest.exec")
+    tasks.getByName<Test>(taskUnitTest) {
+        doLast {
+            executionData.eff()
+        }
+    }
+    val taskCoverageReport = task<JacocoReport>("assemble", variant.name, "CoverageReport") {
+        dependsOn(taskUnitTest)
+        reports {
+            csv.required = false
+            html.required = true
+            xml.required = false
+        }
+        sourceDirectories.setFrom(file("src/main/kotlin"))
+        val dirs = buildDir()
+            .dir("tmp/kotlin-classes")
+            .dir(variant.name)
+            .let(::fileTree)
+        classDirectories.setFrom(dirs)
+        executionData(executionData)
+        doLast {
+            val report = buildDir()
+                .dir("reports/jacoco/$name/html")
+                .eff("index.html")
+            if (report.exists()) {
+                println("Coverage report: ${report.absolutePath}")
+            }
+        }
+    }
+    task<JacocoCoverageVerification>("check", variant.name, "Coverage") {
+        dependsOn(taskCoverageReport)
+        violationRules {
+            rule {
+                limit {
+                    minimum = BigDecimal(0.96)
+                }
+            }
+        }
+        classDirectories.setFrom(taskCoverageReport.classDirectories)
+        executionData(taskCoverageReport.executionData)
+    }
+}
+
 android {
     namespace = "sp.ax.blescanner"
     compileSdk = Version.Android.compileSdk
@@ -171,6 +222,10 @@ android {
         }
     }
 
+    buildTypes.getByName(testBuildType) {
+        isTestCoverageEnabled = true
+    }
+
     fun onVariant(variant: LibraryVariant) {
         val supported = setOf(
             "unstableDebug",
@@ -190,6 +245,9 @@ android {
         assemblePom(variant)
         assembleSource(variant)
         assembleMetadata(variant)
+        if (variant.buildType.name == testBuildType) {
+            checkCoverage(variant)
+        }
         afterEvaluate {
             tasks.getByName<JavaCompile>("compile", variant.name, "JavaWithJavac") {
                 targetCompatibility = Version.jvmTarget
@@ -198,6 +256,14 @@ android {
                 kotlinOptions {
                     jvmTarget = Version.jvmTarget
                     freeCompilerArgs = freeCompilerArgs + setOf("-module-name", maven.moduleName())
+                }
+            }
+            if (variant.buildType.name == testBuildType) {
+                tasks.getByName<JavaCompile>("compile", variant.name, "UnitTestJavaWithJavac") {
+                    targetCompatibility = Version.jvmTarget
+                }
+                tasks.getByName<KotlinCompile>("compile", variant.name, "UnitTestKotlin") {
+                    kotlinOptions.jvmTarget = Version.jvmTarget
                 }
             }
         }
@@ -210,4 +276,5 @@ android {
 
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
+    testImplementation("androidx.test.espresso:espresso-core:3.6.1")
 }
