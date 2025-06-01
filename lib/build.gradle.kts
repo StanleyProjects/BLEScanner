@@ -203,6 +203,19 @@ android {
     namespace = "sp.ax.blescanner"
     compileSdk = Version.Android.compileSdk
 
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all {
+                // https://stackoverflow.com/a/71834475/4398606
+                it.configure<JacocoTaskExtension> {
+                    isIncludeNoLocationClasses = true
+                    excludes = listOf("jdk.internal.*")
+                }
+            }
+        }
+    }
+
     defaultConfig {
         minSdk = Version.Android.minSdk
     }
@@ -276,5 +289,7 @@ android {
 
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
-    testImplementation("androidx.test.espresso:espresso-core:3.6.1")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
+    testImplementation("org.robolectric:robolectric:4.13")
 }
