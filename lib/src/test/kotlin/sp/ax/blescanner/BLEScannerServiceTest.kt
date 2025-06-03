@@ -32,8 +32,8 @@ internal class BLEScannerServiceTest {
     @Test
     fun statesTest() {
         runTest(timeout = 10.seconds) {
-            onScanner {
-                onService<MockScannerService> { context, controller, intent ->
+            onScanner { scanner ->
+                onService<MockScannerService>(scanner = scanner) { context, controller, intent ->
                     launch {
                         BLEScannerReceivers.states(context = context).take(1).collectIndexed { index, state ->
                             when (index) {
@@ -66,15 +66,16 @@ internal class BLEScannerServiceTest {
             coroutineScope = CoroutineScope(coroutineContext + job),
             defaultState = defaultState,
         )
-        MockEnvironment.scanner = scanner
         block(scanner)
         job.cancel()
     }
 
-    private inline fun <reified T : Service> onService(
+    private inline fun <reified T : BLEScannerService> onService(
+        scanner: BLEScanner,
         context: Context = RuntimeEnvironment.getApplication(),
         block: (context: Context, controller: ServiceController<T>, intent: Intent) -> Unit,
     ) {
+        MockEnvironment.scanner = scanner
         val controller = Robolectric.buildService(T::class.java)
         controller.create()
         val intent = Intent(context, T::class.java)
@@ -88,8 +89,8 @@ internal class BLEScannerServiceTest {
     @Test
     fun startTest() {
         runTest(timeout = 10.seconds) {
-            onScanner {
-                onService<MockScannerService> { context, controller, intent ->
+            onScanner { scanner ->
+                onService<MockScannerService>(scanner = scanner) { context, controller, intent ->
                     launch {
                         BLEScannerReceivers.states(context = context).take(3).collectIndexed { index, state ->
                             when (index) {
@@ -115,8 +116,8 @@ internal class BLEScannerServiceTest {
     @Test
     fun stopTest() {
         runTest(timeout = 10.seconds) {
-            onScanner {
-                onService<MockScannerService> { context, controller, intent ->
+            onScanner { scanner ->
+                onService<MockScannerService>(scanner = scanner) { context, controller, intent ->
                     launch {
                         BLEScannerReceivers.states(context = context).take(5).collectIndexed { index, state ->
                             when (index) {
