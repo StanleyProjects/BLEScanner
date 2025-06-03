@@ -23,6 +23,7 @@ import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.android.controller.ServiceController
+import kotlin.coroutines.CoroutineContext
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -56,6 +57,7 @@ internal class BLEScannerServiceTest {
     }
 
     private suspend fun TestScope.onScanner(
+        coroutineContext: CoroutineContext = this.coroutineContext,
         defaultState: BLEScanner.State = BLEScanner.State.Stopped,
         block: suspend (BLEScanner) -> Unit,
     ) {
@@ -98,6 +100,40 @@ internal class BLEScannerServiceTest {
                                 }
                                 1 -> assertEquals(BLEScanner.State.Starting, state)
                                 2 -> assertEquals(BLEScanner.State.Started, state)
+                                else -> error("Index $index is unexpected!")
+                            }
+                        }
+                    }.join {
+                        intent.action = BLEScannerService.BLEScannerStatesAction
+                        controller.startCommand(intent)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun stopTest() {
+        runTest(timeout = 10.seconds) {
+            onScanner {
+                onService<MockScannerService> { context, controller, intent ->
+                    launch {
+                        BLEScannerReceivers.states(context = context).take(5).collectIndexed { index, state ->
+                            when (index) {
+                                0 -> {
+                                    assertEquals(BLEScanner.State.Stopped, state)
+                                    intent.action = BLEScannerService.BLEScannerStartAction
+                                    controller.startCommand(intent)
+                                }
+                                1 -> assertEquals(BLEScanner.State.Starting, state)
+                                2 -> {
+                                    assertEquals(BLEScanner.State.Started, state)
+                                    delay(1.seconds)
+                                    intent.action = BLEScannerService.BLEScannerStopAction
+                                    controller.startCommand(intent)
+                                }
+                                3 -> assertEquals(BLEScanner.State.Stopping, state)
+                                4 -> assertEquals(BLEScanner.State.Stopped, state)
                                 else -> error("Index $index is unexpected!")
                             }
                         }
