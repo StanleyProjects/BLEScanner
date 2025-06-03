@@ -68,6 +68,7 @@ object BLEScannerReceivers {
                     val device = BLEDevice(
                         name = intent?.getStringExtra("name") ?: return,
                         address = intent.getStringExtra("address") ?: return,
+                        bytes = intent.getByteArrayExtra("bytes") ?: return,
                     )
                     trySendBlocking(device)
                 }

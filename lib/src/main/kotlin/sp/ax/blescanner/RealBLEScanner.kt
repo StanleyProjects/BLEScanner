@@ -54,6 +54,7 @@ class RealBLEScanner(
             val device = BLEDevice(
                 name = result?.device?.name ?: return,
                 address = result.device.address ?: return,
+                bytes = result.scanRecord?.bytes ?: return,
             )
             coroutineScope.launch {
                 _devices.emit(device)

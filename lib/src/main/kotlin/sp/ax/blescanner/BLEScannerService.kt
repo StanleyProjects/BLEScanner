@@ -69,6 +69,7 @@ abstract class BLEScannerService(
                 broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
                 broadcast.putExtra("name", device.name)
                 broadcast.putExtra("address", device.address)
+                broadcast.putExtra("bytes", device.bytes)
                 sendBroadcast(broadcast)
             }
         }
