@@ -5,10 +5,10 @@ import android.app.NotificationChannel
 
 internal class MockScannerService : BLEScannerService(
     main = MockEnvironment.main,
-    scanner = MockEnvironment.scanner,
+    scanner = MockEnvironment.scanner ?: error("No scanner!"),
     channel = mockNotificationChannel(),
 ) {
     override fun onStartNotification(channel: NotificationChannel): Notification {
-        TODO("MockScannerService:onStartNotification($channel")
+        return Notification()
     }
 }
