@@ -5,5 +5,6 @@ import kotlin.coroutines.CoroutineContext
 
 internal object MockEnvironment {
     val main: CoroutineContext = UnconfinedTestDispatcher()
+    val default: CoroutineContext = UnconfinedTestDispatcher()
     var scanner: BLEScanner? = null
 }

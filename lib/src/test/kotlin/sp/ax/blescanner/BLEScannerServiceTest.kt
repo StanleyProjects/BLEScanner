@@ -61,12 +61,13 @@ internal class BLEScannerServiceTest {
     private suspend fun TestScope.onScanner(
         devices: List<BLEDevice> = emptyList(),
         coroutineContext: CoroutineContext = this.coroutineContext,
+        default: CoroutineContext = MockEnvironment.default,
         defaultState: BLEScanner.State = BLEScanner.State.Stopped,
         block: suspend (BLEScanner) -> Unit,
     ) {
         val job = SupervisorJob()
         val scanner = MockScanner(
-            coroutineScope = CoroutineScope(coroutineContext + job + UnconfinedTestDispatcher()),
+            coroutineScope = CoroutineScope(coroutineContext + job + default),
             defaultState = defaultState,
             expected = devices,
         )
