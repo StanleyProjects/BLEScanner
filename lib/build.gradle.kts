@@ -203,21 +203,24 @@ android {
     namespace = "sp.ax.blescanner"
     compileSdk = Version.Android.compileSdk
 
-    testOptions {
-        unitTests {
-            isIncludeAndroidResources = true
-            all {
-                // https://stackoverflow.com/a/71834475/4398606
-                it.configure<JacocoTaskExtension> {
-                    isIncludeNoLocationClasses = true
-                    excludes = listOf("jdk.internal.*")
-                }
+    testOptions.unitTests {
+        isIncludeAndroidResources = true
+        all {
+            // https://stackoverflow.com/a/71834475/4398606
+            it.configure<JacocoTaskExtension> {
+                isIncludeNoLocationClasses = true
+                excludes = listOf("jdk.internal.*")
             }
         }
     }
 
     defaultConfig {
         minSdk = Version.Android.minSdk
+    }
+
+    buildTypes.getByName("debug") {
+        testBuildType = name
+        isTestCoverageEnabled = true
     }
 
     productFlavors {
@@ -233,10 +236,6 @@ android {
                 }
             }
         }
-    }
-
-    buildTypes.getByName(testBuildType) {
-        isTestCoverageEnabled = true
     }
 
     fun onVariant(variant: LibraryVariant) {
