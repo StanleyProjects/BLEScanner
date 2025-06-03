@@ -6,19 +6,14 @@ import android.content.Intent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectIndexed
-import kotlinx.coroutines.flow.single
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -52,7 +47,7 @@ internal class BLEScannerServiceTest {
         }
     }
 
-    private suspend fun Job.join(delay: Duration = 2.seconds, preJoin: () -> Unit) {
+    private suspend fun Job.join(delay: Duration = 2.seconds, preJoin: suspend () -> Unit) {
         delay(delay)
         preJoin()
         join()
@@ -160,15 +155,6 @@ internal class BLEScannerServiceTest {
             }
             onScanner(devices = devices) { scanner ->
                 onService<MockScannerService>(scanner = scanner) { context, controller, intent ->
-                    val job = launch {
-                        BLEScannerReceivers.devices(context = context).take(devices.size).collectIndexed { index, actual ->
-                            if (index !in devices.indices) error("Index $index is unexpected!")
-                            val expected = devices[index]
-                            assertEquals(expected.name, actual.name)
-                            assertEquals(expected.address, actual.address)
-                            assertTrue(expected.bytes.contentEquals(actual.bytes))
-                        }
-                    }
                     launch {
                         BLEScannerReceivers.states(context = context).take(3).collectIndexed { index, state ->
                             when (index) {
@@ -183,10 +169,19 @@ internal class BLEScannerServiceTest {
                             }
                         }
                     }.join {
-                        intent.action = BLEScannerService.BLEScannerStatesAction
-                        controller.startCommand(intent)
+                        launch {
+                            BLEScannerReceivers.devices(context = context).take(devices.size).collectIndexed { index, actual ->
+                                if (index !in devices.indices) error("Index $index is unexpected!")
+                                val expected = devices[index]
+                                assertEquals(expected.name, actual.name)
+                                assertEquals(expected.address, actual.address)
+                                assertTrue(expected.bytes.contentEquals(actual.bytes))
+                            }
+                        }.join {
+                            intent.action = BLEScannerService.BLEScannerStatesAction
+                            controller.startCommand(intent)
+                        }
                     }
-                    job.join()
                 }
             }
         }
