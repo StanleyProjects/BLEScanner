@@ -12,6 +12,7 @@ import kotlin.time.Duration.Companion.milliseconds
 internal class MockScanner(
     private val coroutineScope: CoroutineScope,
     defaultState: BLEScanner.State = BLEScanner.State.Stopped,
+    private val expected: List<BLEDevice> = emptyList(),
 ) : BLEScanner {
     private val _states = MutableStateFlow<BLEScanner.State>(defaultState)
     override val states = _states.asStateFlow()
@@ -25,11 +26,9 @@ internal class MockScanner(
         _states.value = BLEScanner.State.Starting
         _states.value = BLEScanner.State.Started
         coroutineScope.launch {
-            var index = 0
-            while (_states.value == BLEScanner.State.Started) {
-                delay(250.milliseconds)
-                _devices.emit(mockBLEDevice(name = "device:$index", address = "address:$index"))
-                index = index.plus(1) % 10
+            for (device in expected) {
+                if (_states.value != BLEScanner.State.Started) break
+                _devices.emit(device)
             }
         }
     }
