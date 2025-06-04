@@ -1,8 +1,11 @@
 package sp.ax.blescanner
 
+import android.Manifest
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -19,7 +22,9 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows
 import org.robolectric.android.controller.ServiceController
+import org.robolectric.annotation.Config
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -86,11 +91,44 @@ internal class BLEScannerServiceTest {
         withIntent(intent).startCommand(flags, startId)
     }
 
+    @Config(sdk = [Build.VERSION_CODES.S])
     @Test
     fun startTest() {
         runTest(timeout = 10.seconds) {
             onScanner { scanner ->
                 onService<MockScannerService>(scanner = scanner) { context, controller, intent ->
+                    launch {
+                        BLEScannerReceivers.states(context = context).take(3).collectIndexed { index, state ->
+                            when (index) {
+                                0 -> {
+                                    assertEquals(BLEScanner.State.Stopped, state)
+                                    intent.action = BLEScannerService.BLEScannerStartAction
+                                    controller.startCommand(intent)
+                                }
+                                1 -> assertEquals(BLEScanner.State.Starting, state)
+                                2 -> assertEquals(BLEScanner.State.Started, state)
+                                else -> error("Index $index is unexpected!")
+                            }
+                        }
+                    }.join {
+                        intent.action = BLEScannerService.BLEScannerStatesAction
+                        controller.startCommand(intent)
+                    }
+                }
+            }
+        }
+    }
+
+    @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
+    @Test
+    fun startTestApi33() {
+        runTest(timeout = 10.seconds) {
+            val application = RuntimeEnvironment.getApplication()
+            val shadow = Shadows.shadowOf(application)
+            shadow.grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+            check(application.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
+            onScanner { scanner ->
+                onService<MockScannerService>(scanner = scanner, context = application) { context, controller, intent ->
                     launch {
                         BLEScannerReceivers.states(context = context).take(3).collectIndexed { index, state ->
                             when (index) {
@@ -176,6 +214,46 @@ internal class BLEScannerServiceTest {
                                 assertEquals(expected.name, actual.name)
                                 assertEquals(expected.address, actual.address)
                                 assertTrue(expected.bytes.contentEquals(actual.bytes))
+                            }
+                        }.join {
+                            intent.action = BLEScannerService.BLEScannerStatesAction
+                            controller.startCommand(intent)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
+    @Test
+    fun permissionsTest() {
+        runTest(timeout = 10.seconds) {
+            val application = RuntimeEnvironment.getApplication()
+            check(application.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+            onScanner { scanner ->
+                onService<MockScannerService>(scanner = scanner, context = application) { context, controller, intent ->
+                    launch {
+                        BLEScannerReceivers.states(context = context).take(1).collectIndexed { index, state ->
+                            when (index) {
+                                0 -> {
+                                    assertEquals(BLEScanner.State.Stopped, state)
+                                    intent.action = BLEScannerService.BLEScannerStartAction
+                                    controller.startCommand(intent)
+                                }
+                                else -> error("Index $index is unexpected!")
+                            }
+                        }
+                    }.join {
+                        launch {
+                            BLEScannerReceivers.errors(context = context).take(1).collectIndexed { index, actual ->
+                                when (index) {
+                                    0 -> {
+                                        check(actual is SecurityException)
+                                        assertEquals(actual.message, "no permission: ${Manifest.permission.POST_NOTIFICATIONS}")
+                                    }
+                                    else -> error("Index $index is unexpected!")
+                                }
                             }
                         }.join {
                             intent.action = BLEScannerService.BLEScannerStatesAction
