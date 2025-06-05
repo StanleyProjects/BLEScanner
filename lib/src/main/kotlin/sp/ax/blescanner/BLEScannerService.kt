@@ -33,10 +33,12 @@ abstract class BLEScannerService(
         }
         coroutineScope.launch {
             scanner.states.drop(1).collect { state ->
+                System.err.println("[BLEScannerService]:state: $state") // todo
                 val broadcast = Intent(BLEScannerStatesAction)
                 broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
                 broadcast.putExtra("state", state.name)
                 sendBroadcast(broadcast)
+                System.err.println("[BLEScannerService]:send:broadcast: ${broadcast.action} ${broadcast.getStringExtra("state")}") // todo
                 when (state) {
                     BLEScanner.State.Started -> {
                         val notification = onStartNotification(channel = channel)
@@ -57,6 +59,7 @@ abstract class BLEScannerService(
         }
         coroutineScope.launch {
             scanner.errors.collect { error ->
+                System.err.println("[BLEScannerService]:error: $error") // todo
                 val broadcast = Intent(BLEScannerErrorsAction)
                 broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
                 broadcast.putExtra("error", error)
@@ -65,6 +68,7 @@ abstract class BLEScannerService(
         }
         coroutineScope.launch {
             scanner.devices.collect { device ->
+                System.err.println("[BLEScannerService]:device: $device") // todo
                 val broadcast = Intent(BLEScannerDevicesAction)
                 broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
                 broadcast.putExtra("name", device.name)

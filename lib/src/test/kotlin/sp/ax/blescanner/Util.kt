@@ -7,6 +7,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.time.Duration
@@ -44,13 +45,13 @@ internal suspend fun onMockScannerOld(
 }
 
 internal suspend fun TestScope.onMockScanner(
+    main: CoroutineContext = StandardTestDispatcher(testScheduler, "mock:scanner:main"),
+    default: CoroutineContext = StandardTestDispatcher(testScheduler, "mock:scanner:default"),
     defaultState: BLEScanner.State = BLEScanner.State.Stopped,
     devices: List<BLEDevice> = emptyList(),
     block: suspend (BLEScanner) -> Unit,
 ) {
     val job = SupervisorJob()
-    val main = StandardTestDispatcher(testScheduler, "main")
-    val default = StandardTestDispatcher(testScheduler, "default")
     val scanner = MockScanner(
         coroutineScope = CoroutineScope(main + job),
         default = default + job,

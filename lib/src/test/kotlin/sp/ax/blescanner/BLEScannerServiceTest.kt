@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectIndexed
@@ -17,9 +18,11 @@ import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -30,33 +33,13 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows
 import org.robolectric.android.controller.ServiceController
 import org.robolectric.annotation.Config
+import java.util.concurrent.CancellationException
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.time.Duration.Companion.seconds
 
 @RunWith(RobolectricTestRunner::class)
 internal class BLEScannerServiceTest {
-    @Test
-    fun statesTest() {
-        runTest(timeout = 6.seconds) {
-            onMockScanner { scanner ->
-                onService<MockScannerService>(scanner = scanner) { context, controller, intent ->
-                    launch {
-                        BLEScannerReceivers.states(context = context).take(1).collectIndexed { index, state ->
-                            when (index) {
-                                0 -> assertEquals(BLEScanner.State.Stopped, state)
-                                else -> error("Index $index is unexpected!")
-                            }
-                        }
-                    }.join {
-                        intent.action = BLEScannerService.BLEScannerStatesAction
-                        controller.startCommand(intent)
-                    }
-                }
-            }
-        }
-    }
-
     private inline fun <reified T : BLEScannerService> onService(
         scanner: BLEScanner,
         main: CoroutineContext = MockEnvironment.main,
@@ -75,26 +58,76 @@ internal class BLEScannerServiceTest {
         withIntent(intent).startCommand(flags, startId)
     }
 
-    @Config(sdk = [Build.VERSION_CODES.S])
     @Test
-    fun startTest() {
-        runTest(StandardTestDispatcher(), timeout = 6.seconds) {
-            onMockScanner() { scanner ->
-                onService<MockScannerService>(scanner = scanner, main = StandardTestDispatcher()) { context, controller, intent ->
-                    launch(CoroutineName("BLEScannerServiceTest:startTest:errors")) {
-                        BLEScannerReceivers.errors(context = context).take(1).collect { error ->
+    fun statesTest() {
+        runTest(timeout = 6.seconds) {
+            onMockScanner { scanner ->
+                onService<MockScannerService>(scanner = scanner) { context, controller, intent ->
+                    launch(CoroutineName("errors")) {
+                        scanner.errors.take(1).collect { error ->
                             error("Error $error is unexpected!")
                         }
                     }.cancel {
-                        launch(CoroutineName("BLEScannerServiceTest:startTest:states")) {
-                            BLEScannerReceivers.states(context = context).takeWhile { state ->
-                                state != BLEScanner.State.Started
-                            }.collect()
-                        }.join {
-                            intent.action = BLEScannerService.BLEScannerStartAction
-                            controller.startCommand(intent)
+                        launch(CoroutineName("devices")) {
+                            scanner.devices.take(1).collect { device ->
+                                error("Device $device is unexpected!")
+                            }
+                        }.cancel {
+                            launch(CoroutineName("states")) {
+                                BLEScannerReceivers.states(context = context).take(1).collectIndexed { index, state ->
+                                    when (index) {
+                                        0 -> assertEquals(BLEScanner.State.Stopped, state)
+                                        else -> error("Index $index is unexpected!")
+                                    }
+                                }
+                            }.join {
+                                intent.action = BLEScannerService.BLEScannerStatesAction
+                                controller.startCommand(intent)
+                            }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    @Config(sdk = [Build.VERSION_CODES.S])
+    @Test
+    fun startTest() {
+        runTest(timeout = 6.seconds) {
+            val main = StandardTestDispatcher(testScheduler, "main")
+            val default = StandardTestDispatcher(testScheduler, "scanner:default")
+//            val main = UnconfinedTestDispatcher()
+//            val main = UnconfinedTestDispatcher(testScheduler, "main")
+            onMockScanner(
+                main = main,
+                default = default,
+            ) { scanner ->
+                onService<MockScannerService>(scanner = scanner, main = main) { context, controller, intent ->
+                    assertEquals("before start", BLEScanner.State.Stopped, scanner.states.value)
+                    launch(CoroutineName("start")) {
+                        BLEScannerReceivers.states(context = context).take(3).collectIndexed { index, state ->
+                            System.err.println("$index:$state") // todo
+                            when (index) {
+                                0 -> TODO("$index:$state")
+                                0 -> assertEquals(BLEScanner.State.Starting, state)
+                                1 -> TODO("$index:$state")
+                                1 -> assertEquals(BLEScanner.State.Stopped, state)
+                                else -> error("Index $index is unexpected!")
+                            }
+                        }
+//                      BLEScannerReceivers.states(context = context).takeWhile { state ->
+//                          state != BLEScanner.State.Started
+//                      }.collect()
+                    }.join {
+                        val broadcast = Intent(BLEScannerService.BLEScannerStatesAction)
+                        broadcast.setPackage(context.packageName) // https://stackoverflow.com/a/76920719/4398606
+                        broadcast.putExtra("state", BLEScanner.State.Started)
+                        context.sendBroadcast(broadcast)
+//                        intent.action = BLEScannerService.BLEScannerStartAction
+//                        controller.startCommand(intent)
+                    }
+                    assertEquals("after start", BLEScanner.State.Started, scanner.states.value)
                 }
             }
         }
