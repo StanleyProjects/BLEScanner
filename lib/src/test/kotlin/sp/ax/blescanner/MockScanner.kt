@@ -1,5 +1,6 @@
 package sp.ax.blescanner
 
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -25,24 +26,27 @@ internal class MockScanner(
     override val devices = _devices.asSharedFlow()
 
     override fun start() {
-        coroutineScope.launch {
+        coroutineScope.launch(CoroutineName("MockScanner:start")) {
             withContext(default) {
                 if (_states.value != BLEScanner.State.Stopped) TODO("MockScanner:start(${_states.value})")
                 _states.value = BLEScanner.State.Starting
+                delay(1.seconds)
                 _states.value = BLEScanner.State.Started
                 for (device in expected) {
                     if (_states.value != BLEScanner.State.Started) break
                     _devices.emit(device)
+                    delay(1.seconds)
                 }
             }
         }
     }
 
     override fun stop() {
-        coroutineScope.launch {
+        coroutineScope.launch(CoroutineName("MockScanner:stop")) {
             withContext(default) {
                 if (_states.value != BLEScanner.State.Started) TODO("MockScanner:start(${_states.value})")
                 _states.value = BLEScanner.State.Stopping
+                delay(1.seconds)
                 _states.value = BLEScanner.State.Stopped
             }
         }

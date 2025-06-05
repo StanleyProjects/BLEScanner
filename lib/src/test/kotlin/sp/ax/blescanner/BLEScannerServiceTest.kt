@@ -8,21 +8,15 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectIndexed
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.takeWhile
-import kotlinx.coroutines.flow.withIndex
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.TestCoroutineScheduler
-import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -38,7 +32,6 @@ import org.robolectric.android.controller.ServiceController
 import org.robolectric.annotation.Config
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 @RunWith(RobolectricTestRunner::class)
@@ -46,7 +39,7 @@ internal class BLEScannerServiceTest {
     @Test
     fun statesTest() {
         runTest(timeout = 6.seconds) {
-            onScanner { scanner ->
+            onMockScanner { scanner ->
                 onService<MockScannerService>(scanner = scanner) { context, controller, intent ->
                     launch {
                         BLEScannerReceivers.states(context = context).take(1).collectIndexed { index, state ->
@@ -64,49 +57,14 @@ internal class BLEScannerServiceTest {
         }
     }
 
-    private suspend fun TestScope.onScanner(
-        main: CoroutineContext = MockEnvironment.main,
-        default: CoroutineContext = MockEnvironment.default,
-        defaultState: BLEScanner.State = BLEScanner.State.Stopped,
-        devices: List<BLEDevice> = emptyList(),
-        block: suspend (BLEScanner) -> Unit,
-    ) {
-        val job = SupervisorJob()
-        val scanner = MockScanner(
-            coroutineScope = CoroutineScope(main + job),
-            default = default,
-            defaultState = defaultState,
-            expected = devices,
-        )
-        block(scanner)
-        job.cancel()
-    }
-
-    private suspend fun TestScope.onRealScanner(
-        coroutineContext: CoroutineContext = this.coroutineContext,
-        main: CoroutineContext = MockEnvironment.main,
-        default: CoroutineContext = MockEnvironment.default,
-        context: Context = RuntimeEnvironment.getApplication(),
-        timeout: Duration = 5.seconds,
-        block: suspend (BLEScanner) -> Unit,
-    ) {
-        val job = SupervisorJob()
-        val scanner = RealBLEScanner(
-            coroutineScope = CoroutineScope(coroutineContext + job + main),
-            default = default,
-            context = context,
-            timeout = timeout,
-        )
-        block(scanner)
-        job.cancel()
-    }
-
-    private inline fun <reified T : BLEScannerService> TestScope.onService(
+    private inline fun <reified T : BLEScannerService> onService(
         scanner: BLEScanner,
+        main: CoroutineContext = MockEnvironment.main,
         context: Context = RuntimeEnvironment.getApplication(),
         block: (context: Context, controller: ServiceController<T>, intent: Intent) -> Unit,
     ) {
         MockEnvironment.scanner = scanner
+        MockEnvironment.main = main
         val controller = Robolectric.buildService(T::class.java)
         controller.create()
         val intent = Intent(context, T::class.java)
@@ -120,32 +78,22 @@ internal class BLEScannerServiceTest {
     @Config(sdk = [Build.VERSION_CODES.S])
     @Test
     fun startTest() {
-        runTest(timeout = 6.seconds) {
-            onScanner(
-                main = coroutineContext,
-                default = coroutineContext,
-//                default = StandardTestDispatcher(testScheduler),
-            ) { scanner ->
-                onService<MockScannerService>(scanner = scanner) { context, controller, intent ->
-                    launch(CoroutineName("states")) {
-                        BLEScannerReceivers.states(context = context).take(3).collectIndexed { index, state ->
-                            when (index) {
-                                0 -> {
-                                    assertEquals(BLEScanner.State.Stopped, state)
-                                    intent.action = BLEScannerService.BLEScannerStartAction
-                                    controller.startCommand(intent)
-                                    testScheduler.advanceUntilIdle()
-                                }
-                                1 -> TODO("$index:$state")
-                                1 -> assertEquals(BLEScanner.State.Starting, state)
-                                2 -> TODO("$index:$state")
-                                2 -> assertEquals(BLEScanner.State.Started, state)
-                                else -> error("Index $index is unexpected!")
-                            }
+        runTest(StandardTestDispatcher(), timeout = 6.seconds) {
+            onMockScanner() { scanner ->
+                onService<MockScannerService>(scanner = scanner, main = StandardTestDispatcher()) { context, controller, intent ->
+                    launch(CoroutineName("BLEScannerServiceTest:startTest:errors")) {
+                        BLEScannerReceivers.errors(context = context).take(1).collect { error ->
+                            error("Error $error is unexpected!")
                         }
-                    }.join {
-                        intent.action = BLEScannerService.BLEScannerStatesAction
-                        controller.startCommand(intent)
+                    }.cancel {
+                        launch(CoroutineName("BLEScannerServiceTest:startTest:states")) {
+                            BLEScannerReceivers.states(context = context).takeWhile { state ->
+                                state != BLEScanner.State.Started
+                            }.collect()
+                        }.join {
+                            intent.action = BLEScannerService.BLEScannerStartAction
+                            controller.startCommand(intent)
+                        }
                     }
                 }
             }
@@ -160,24 +108,21 @@ internal class BLEScannerServiceTest {
             val shadow = Shadows.shadowOf(application)
             shadow.grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
             check(application.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
-            onScanner { scanner ->
+            onMockScanner { scanner ->
                 onService<MockScannerService>(scanner = scanner, context = application) { context, controller, intent ->
-                    launch {
-                        BLEScannerReceivers.states(context = context).take(3).collectIndexed { index, state ->
-                            when (index) {
-                                0 -> {
-                                    assertEquals(BLEScanner.State.Stopped, state)
-                                    intent.action = BLEScannerService.BLEScannerStartAction
-                                    controller.startCommand(intent)
-                                }
-                                1 -> assertEquals(BLEScanner.State.Starting, state)
-                                2 -> assertEquals(BLEScanner.State.Started, state)
-                                else -> error("Index $index is unexpected!")
-                            }
+                    launch(CoroutineName("BLEScannerServiceTest:startTest:errors")) {
+                        BLEScannerReceivers.errors(context = context).take(1).collect { error ->
+                            error("Error $error is unexpected!")
                         }
-                    }.join {
-                        intent.action = BLEScannerService.BLEScannerStatesAction
-                        controller.startCommand(intent)
+                    }.cancel {
+                        launch(CoroutineName("BLEScannerServiceTest:startTest:states")) {
+                            BLEScannerReceivers.states(context = context).takeWhile { state ->
+                                state != BLEScanner.State.Started
+                            }.collect()
+                        }.join {
+                            intent.action = BLEScannerService.BLEScannerStartAction
+                            controller.startCommand(intent)
+                        }
                     }
                 }
             }
@@ -187,7 +132,7 @@ internal class BLEScannerServiceTest {
     @Test
     fun stopTest() {
         runTest(timeout = 10.seconds) {
-            onScanner { scanner ->
+            onMockScanner { scanner ->
                 onService<MockScannerService>(scanner = scanner) { context, controller, intent ->
                     launch {
                         BLEScannerReceivers.states(context = context).take(5).collectIndexed { index, state ->
@@ -224,7 +169,7 @@ internal class BLEScannerServiceTest {
             val devices = (1..3).map { number ->
                 BLEDevice(name = "name$number", address = "address$number", byteArrayOf(number.toByte()))
             }
-            onScanner(devices = devices) { scanner ->
+            onMockScanner(devices = devices) { scanner ->
                 onService<MockScannerService>(scanner = scanner) { context, controller, intent ->
                     launch {
                         BLEScannerReceivers.states(context = context).take(3).collectIndexed { index, state ->
@@ -264,7 +209,7 @@ internal class BLEScannerServiceTest {
         runTest(timeout = 10.seconds) {
             val application = RuntimeEnvironment.getApplication()
             check(application.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
-            onScanner { scanner ->
+            onMockScanner { scanner ->
                 onService<MockScannerService>(scanner = scanner, context = application) { context, controller, intent ->
                     launch {
                         BLEScannerReceivers.states(context = context).take(1).collectIndexed { index, state ->
@@ -300,22 +245,14 @@ internal class BLEScannerServiceTest {
 
     @Test
     fun realScannerTest() {
-//        val cc = EmptyCoroutineContext
-        val cc = UnconfinedTestDispatcher()
-//        val cc = StandardTestDispatcher(TestCoroutineScheduler())
-//        runTest(MockEnvironment.main, timeout = 6.seconds) {
-        runTest(cc, timeout = 6.seconds) {
+        runTest(timeout = 6.seconds) {
             val application = RuntimeEnvironment.getApplication()
             val bm = application.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
             Shadows.shadowOf(bm.adapter).setState(BluetoothAdapter.STATE_ON)
             check(bm.adapter.isEnabled)
 //            Shadows.shadowOf(application).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION)
 //            check(application.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
-            onRealScanner(
-                context = application,
-                main = cc,
-                default = cc + testScheduler,
-            ) { scanner ->
+            onRealBLEScanner(context = application) { scanner ->
                 onService<MockScannerService>(scanner = scanner, context = application) { context, controller, intent ->
                     launch {
                         BLEScannerReceivers.errors(context = context).collect { actual ->

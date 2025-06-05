@@ -14,7 +14,6 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.os.Build
-import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -89,7 +88,7 @@ class RealBLEScanner(
     }
 
     init {
-        coroutineScope.launch(CoroutineName("${this::class.java.simpleName}:init")) { // todo
+        coroutineScope.launch {
             withContext(default) {
                 states.collect { state ->
                     when (state) {
@@ -223,7 +222,7 @@ class RealBLEScanner(
     }
 
     override fun start() {
-        coroutineScope.launch(CoroutineName("${this::class.java.simpleName}:start")) { // todo
+        coroutineScope.launch {
             val callback = InternalScanCallback(id = UUID.randomUUID()) // todo
             mutex.withLock {
                 withContext(default) {
