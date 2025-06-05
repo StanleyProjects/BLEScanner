@@ -13,14 +13,16 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
 import kotlin.time.Duration.Companion.seconds
 
 @RunWith(RobolectricTestRunner::class)
 internal class BLEScannerReceiversTest {
+    @Config(application = MockApplication::class)
     @Test
     fun statesTest() {
         runTest(timeout = 6.seconds) {
-            val context: Context = MockContext(RuntimeEnvironment.getApplication())
+            val context: Context = RuntimeEnvironment.getApplication()
             val states = BLEScanner.State.entries.toList()
             launch(CoroutineName("states")) {
                 BLEScannerReceivers.states(context = context).take(states.size).collectIndexed { index, actual ->
@@ -38,10 +40,11 @@ internal class BLEScannerReceiversTest {
         }
     }
 
+    @Config(application = MockApplication::class)
     @Test
     fun errorsTest() {
         runTest(timeout = 6.seconds) {
-            val context: Context = MockContext(RuntimeEnvironment.getApplication())
+            val context: Context = RuntimeEnvironment.getApplication()
             val errors = listOf(
                 IllegalStateException("1"),
                 IllegalArgumentException("2"),
@@ -63,10 +66,11 @@ internal class BLEScannerReceiversTest {
         }
     }
 
+    @Config(application = MockApplication::class)
     @Test
     fun devicesTest() {
         runTest(timeout = 6.seconds) {
-            val context: Context = MockContext(RuntimeEnvironment.getApplication())
+            val context: Context = RuntimeEnvironment.getApplication()
             val devices = (1..3).map { number ->
                 BLEDevice(
                     name = "name:$number",

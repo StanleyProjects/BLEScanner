@@ -1,13 +1,17 @@
 package sp.ax.blescanner
 
+import android.app.Application
 import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.ContextWrapper
 import android.content.Intent
 import android.content.IntentFilter
 
-internal class MockContext(base: Context) : ContextWrapper(base) {
+internal class MockApplication : Application() {
     private val receivers = mutableMapOf<String, BroadcastReceiver>()
+
+    override fun getBaseContext(): Context {
+        return this // todo
+    }
 
     override fun registerReceiver(
         receiver: BroadcastReceiver?,
@@ -36,7 +40,7 @@ internal class MockContext(base: Context) : ContextWrapper(base) {
 
     override fun sendBroadcast(intent: Intent?) {
         if (intent == null) TODO()
-        if (intent.getPackage() != baseContext.packageName) TODO()
+        if (intent.getPackage() != packageName) TODO()
         val receiver = receivers[intent.action] ?: TODO()
         receiver.onReceive(this, intent)
     }

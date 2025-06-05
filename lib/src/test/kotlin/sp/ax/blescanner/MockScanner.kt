@@ -28,28 +28,18 @@ internal class MockScanner(
     override fun start() {
         coroutineScope.launch(CoroutineName("MockScanner:start")) {
             withContext(default) {
+                if (_states.value != BLEScanner.State.Stopped) TODO("MockScanner:start(${_states.value})")
                 _states.value = BLEScanner.State.Starting
-//                delay(1.seconds)
+                delay(1.seconds)
                 _states.value = BLEScanner.State.Started
+                for (device in expected) {
+                    if (_states.value != BLEScanner.State.Started) break
+                    _devices.emit(device)
+                    delay(1.seconds)
+                }
             }
         }
     }
-
-//    override fun start() {
-//        coroutineScope.launch(CoroutineName("MockScanner:start")) {
-//            withContext(default) {
-//                if (_states.value != BLEScanner.State.Stopped) TODO("MockScanner:start(${_states.value})")
-//                _states.value = BLEScanner.State.Starting
-//                delay(1.seconds)
-//                _states.value = BLEScanner.State.Started
-//                for (device in expected) {
-//                    if (_states.value != BLEScanner.State.Started) break
-//                    _devices.emit(device)
-//                    delay(1.seconds)
-//                }
-//            }
-//        }
-//    }
 
     override fun stop() {
         coroutineScope.launch(CoroutineName("MockScanner:stop")) {
