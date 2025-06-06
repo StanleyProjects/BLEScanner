@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -148,7 +147,6 @@ class RealBLEScanner(
             val currentCallback = scanCallback.get() ?: break
             if (currentCallback.id != callback.id) break
             if (_states.value != BLEScanner.State.Started) break
-            if (!coroutineScope.isActive) break // todo
             val timeNow = now()
             val timeDiff = timeNow - timeLastResult
             if (timeDiff > timeout) {
