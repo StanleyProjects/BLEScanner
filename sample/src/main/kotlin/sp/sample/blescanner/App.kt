@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import sp.ax.blescanner.BLEScanner
 import sp.ax.blescanner.RealBLEScanner
+import kotlin.time.Duration.Companion.seconds
 
 internal class App : Application() {
     private val job = SupervisorJob()
@@ -26,6 +27,7 @@ internal class App : Application() {
             coroutineScope = coroutineScope,
             default = contexts.default,
             context = this,
+            timeout = 3.seconds,
         )
     }
 
