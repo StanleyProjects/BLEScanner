@@ -9,8 +9,6 @@ import android.bluetooth.le.ScanResult
 import android.content.Context
 import android.content.pm.PackageManager
 import kotlinx.coroutines.CoroutineName
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.takeWhile
@@ -131,8 +129,7 @@ internal class RealBLEScannerTest {
                             }.collect()
                         }.join {
                             launch(CoroutineName("devices")) {
-                                scanner.devices.take(devices.size).toCollection(ArrayList())
-                                    .sortedBy { it.address }.forEachIndexed { index, actual ->
+                                scanner.devices.take(devices.size).toCollection(ArrayList()).sortedBy { it.address }.forEachIndexed { index, actual ->
                                     if (index !in devices.indices) error("Index $index is unexpected!")
                                     val expected = devices[index]
                                     assertEquals(expected.name, actual.name)
@@ -142,16 +139,11 @@ internal class RealBLEScannerTest {
                             }.join {
                                 scanner.start()
                                 devices.forEach { device ->
-                                    val record: ScanRecord =
-                                        ScanRecord::class.java.invoke<ScanRecord>(
-                                            "parseFromBytes",
-                                            device.bytes
-                                        )
+                                    val record: ScanRecord = ScanRecord::class.java.invoke<ScanRecord>("parseFromBytes", device.bytes)
                                     val bd = bm.adapter.getRemoteDevice(device.address)
                                     Shadows.shadowOf(bd).setName(device.name)
                                     val result = ScanResult(bd, record, 1, 1)
-                                    Shadows.shadowOf(bm.adapter.bluetoothLeScanner)
-                                        .addScanResult(result)
+                                    Shadows.shadowOf(bm.adapter.bluetoothLeScanner).addScanResult(result)
                                 }
                             }
                         }
