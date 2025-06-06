@@ -6,35 +6,20 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.channels.onFailure
-import kotlinx.coroutines.channels.onSuccess
-import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.flow.internal.ChannelFlow
-import kotlin.time.Duration.Companion.milliseconds
 
 object BLEScannerReceivers {
     fun states(context: Context): Flow<BLEScanner.State> {
         return callbackFlow {
-            System.err.println("[BLEScannerReceivers:states]:flow...") // todo
             val receivers = object : BroadcastReceiver() {
                 override fun onReceive(context: Context?, intent: Intent?) {
-                    System.err.println("[BLEScannerReceivers:states]:intent: ${intent?.action} state: ${intent?.getStringExtra("state")}") // todo
                     val state = intent?.getStringExtra("state")?.let { name ->
                         BLEScanner.State.entries.firstOrNull { it.name == name }
                     } ?: return
                     trySend(state)
-                        .onSuccess { value ->
-                            System.err.println("[BLEScannerReceivers:states]:success:send: $value") // todo
-                        }
-                        .onFailure { error ->
-                            System.err.println("[BLEScannerReceivers:states]:failure:send: $error") // todo
-                        }
                 }
             }
-            val timeStart = System.currentTimeMillis()
             val filters = IntentFilter(BLEScannerService.BLEScannerStatesAction)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 context.registerReceiver(
@@ -45,10 +30,7 @@ object BLEScannerReceivers {
             } else {
                 context.registerReceiver(receivers, filters)
             }
-            System.err.println("[BLEScannerReceivers:states]:register:receivers: $receivers") // todo
             awaitClose {
-                val timeNow = System.currentTimeMillis()
-                System.err.println("[BLEScannerReceivers:states]:close(${(timeNow - timeStart).milliseconds})...") // todo
                 context.unregisterReceiver(receivers)
             }
         }
