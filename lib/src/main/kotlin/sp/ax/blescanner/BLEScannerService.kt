@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.IBinder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
@@ -24,6 +25,7 @@ abstract class BLEScannerService(
     private val job = SupervisorJob()
     protected val coroutineScope = CoroutineScope(main + job)
     private val N_ID: Int = System.currentTimeMillis().toInt()
+    protected val states: StateFlow<BLEScanner.State> get() = scanner.states
 
     override fun onCreate() {
         super.onCreate()
@@ -41,16 +43,18 @@ abstract class BLEScannerService(
                     BLEScanner.State.Started -> {
                         val notification = onStartNotification()
                         nm.notify(N_ID, notification)
-                        startForeground(N_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
-                    }
-                    BLEScanner.State.Starting -> {
-                        // noop
-                    }
-                    BLEScanner.State.Stopping -> {
-                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            startForeground(N_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+                        } else {
+                            startForeground(N_ID, notification)
+                        }
                     }
                     BLEScanner.State.Stopped -> {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
                         stopSelf()
+                    }
+                    else -> {
+                        // noop
                     }
                 }
             }
@@ -114,10 +118,6 @@ abstract class BLEScannerService(
         if (scanner.states.value == BLEScanner.State.Stopped) return
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(N_ID, notification)
-    }
-
-    protected fun getState(): BLEScanner.State {
-        return scanner.states.value
     }
 
     companion object {

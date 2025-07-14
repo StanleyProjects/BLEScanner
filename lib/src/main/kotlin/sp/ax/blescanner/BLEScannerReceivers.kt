@@ -21,15 +21,7 @@ object BLEScannerReceivers {
                 }
             }
             val filters = IntentFilter(BLEScannerService.BLEScannerStatesAction)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(
-                    receivers,
-                    filters,
-                    Context.RECEIVER_NOT_EXPORTED,
-                )
-            } else {
-                context.registerReceiver(receivers, filters)
-            }
+            register(context, receivers, filters)
             awaitClose {
                 context.unregisterReceiver(receivers)
             }
@@ -45,15 +37,7 @@ object BLEScannerReceivers {
                 }
             }
             val filters = IntentFilter(BLEScannerService.BLEScannerErrorsAction)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(
-                    receivers,
-                    filters,
-                    Context.RECEIVER_NOT_EXPORTED,
-                )
-            } else {
-                context.registerReceiver(receivers, filters)
-            }
+            register(context, receivers, filters)
             awaitClose {
                 context.unregisterReceiver(receivers)
             }
@@ -73,18 +57,22 @@ object BLEScannerReceivers {
                 }
             }
             val filters = IntentFilter(BLEScannerService.BLEScannerDevicesAction)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(
-                    receivers,
-                    filters,
-                    Context.RECEIVER_NOT_EXPORTED,
-                )
-            } else {
-                context.registerReceiver(receivers, filters)
-            }
+            register(context, receivers, filters)
             awaitClose {
                 context.unregisterReceiver(receivers)
             }
+        }
+    }
+
+    private fun register(context: Context, receivers: BroadcastReceiver, filters: IntentFilter) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(
+                receivers,
+                filters,
+                Context.RECEIVER_NOT_EXPORTED,
+            )
+        } else {
+            context.registerReceiver(receivers, filters)
         }
     }
 }

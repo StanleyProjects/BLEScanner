@@ -73,8 +73,10 @@ class RealBLEScanner(
                 }
                 LocationManager.PROVIDERS_CHANGED_ACTION -> {
                     val lm = context.getSystemService(LocationManager::class.java)
-                    val name = intent.getStringExtra(LocationManager.EXTRA_PROVIDER_NAME)
-                    if (name != LocationManager.GPS_PROVIDER) return
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        val name = intent.getStringExtra(LocationManager.EXTRA_PROVIDER_NAME)
+                        if (name != LocationManager.GPS_PROVIDER) return
+                    }
                     val isLocationEnabled = lm.isProviderEnabled(LocationManager.GPS_PROVIDER)
                     if (!isLocationEnabled) stop()
                 }

@@ -195,4 +195,51 @@ internal class BLEScannerServiceTest {
             }
         }
     }
+
+    @Config(application = MockApplication::class, sdk = [Build.VERSION_CODES.S, Build.VERSION_CODES.TIRAMISU])
+    @Test
+    fun errorsTest() {
+        runTest(timeout = 6.seconds) {
+            onMockScanner { scanner ->
+                val application = RuntimeEnvironment.getApplication()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    val shadow = Shadows.shadowOf(application)
+//                    shadow.grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+//                    check(application.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
+                }
+                onService<MockScannerService>(scanner = scanner, application = application) { context, controller, intent ->
+                    launch(CoroutineName("errors")) {
+                        BLEScannerReceivers.errors(context = context).take(1).collect { error ->
+                            error("Error $error is unexpected!")
+                        }
+                    }.cancel {
+                        assertEquals("before start", BLEScanner.State.Stopped, scanner.states.value)
+                        launch(CoroutineName("start")) {
+                            BLEScannerReceivers.states(context = context).take(2).collectIndexed { index, state ->
+                                when (index) {
+                                    0 -> assertEquals(BLEScanner.State.Starting, state)
+                                    1 -> assertEquals(BLEScanner.State.Started, state)
+                                    else -> error("Index $index is unexpected!")
+                                }
+                            }
+                        }.join()
+                        assertEquals("after start", BLEScanner.State.Started, scanner.states.value)
+                        launch(CoroutineName("stop")) {
+                            BLEScannerReceivers.states(context = context).take(2).collectIndexed { index, state ->
+                                when (index) {
+                                    0 -> assertEquals(BLEScanner.State.Stopping, state)
+                                    1 -> assertEquals(BLEScanner.State.Stopped, state)
+                                    else -> error("Index $index is unexpected!")
+                                }
+                            }
+                        }.join {
+                            intent.action = BLEScannerService.BLEScannerStopAction
+                            controller.startCommand(intent)
+                        }
+                        assertEquals("after stop", BLEScanner.State.Stopped, scanner.states.value)
+                    }
+                }
+            }
+        }
+    }
 }
