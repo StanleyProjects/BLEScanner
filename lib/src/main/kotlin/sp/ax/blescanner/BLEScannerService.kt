@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.IBinder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
@@ -19,11 +20,12 @@ import kotlin.coroutines.CoroutineContext
 abstract class BLEScannerService(
     main: CoroutineContext,
     private val scanner: BLEScanner,
-    private val channel: NotificationChannel,
+    protected val channel: NotificationChannel,
 ) : Service() {
     private val job = SupervisorJob()
-    private val coroutineScope = CoroutineScope(main + job)
+    protected val coroutineScope = CoroutineScope(main + job)
     private val N_ID: Int = System.currentTimeMillis().toInt()
+    protected val states: StateFlow<BLEScanner.State> get() = scanner.states
 
     override fun onCreate() {
         super.onCreate()
@@ -39,18 +41,20 @@ abstract class BLEScannerService(
                 sendBroadcast(broadcast)
                 when (state) {
                     BLEScanner.State.Started -> {
-                        val notification = onStartNotification(channel = channel)
+                        val notification = onStartNotification()
                         nm.notify(N_ID, notification)
-                        startForeground(N_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
-                    }
-                    BLEScanner.State.Starting -> {
-                        // noop
-                    }
-                    BLEScanner.State.Stopping -> {
-                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            startForeground(N_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+                        } else {
+                            startForeground(N_ID, notification)
+                        }
                     }
                     BLEScanner.State.Stopped -> {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
                         stopSelf()
+                    }
+                    else -> {
+                        // noop
                     }
                 }
             }
@@ -108,7 +112,13 @@ abstract class BLEScannerService(
         job.cancel()
     }
 
-    protected abstract fun onStartNotification(channel: NotificationChannel): Notification
+    protected abstract fun onStartNotification(): Notification
+
+    protected fun notify(notification: Notification) {
+        if (scanner.states.value == BLEScanner.State.Stopped) return
+        val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(N_ID, notification)
+    }
 
     companion object {
         const val BLEScannerStatesAction = "sp.ax.blescanner.BLEScannerStatesAction"
