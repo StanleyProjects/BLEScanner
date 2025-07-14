@@ -19,10 +19,10 @@ import kotlin.coroutines.CoroutineContext
 abstract class BLEScannerService(
     main: CoroutineContext,
     private val scanner: BLEScanner,
-    private val channel: NotificationChannel,
+    protected val channel: NotificationChannel,
 ) : Service() {
     private val job = SupervisorJob()
-    private val coroutineScope = CoroutineScope(main + job)
+    protected val coroutineScope = CoroutineScope(main + job)
     private val N_ID: Int = System.currentTimeMillis().toInt()
 
     override fun onCreate() {
@@ -39,7 +39,7 @@ abstract class BLEScannerService(
                 sendBroadcast(broadcast)
                 when (state) {
                     BLEScanner.State.Started -> {
-                        val notification = onStartNotification(channel = channel)
+                        val notification = onStartNotification()
                         nm.notify(N_ID, notification)
                         startForeground(N_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
                     }
@@ -108,7 +108,17 @@ abstract class BLEScannerService(
         job.cancel()
     }
 
-    protected abstract fun onStartNotification(channel: NotificationChannel): Notification
+    protected abstract fun onStartNotification(): Notification
+
+    protected fun notify(notification: Notification) {
+        if (scanner.states.value == BLEScanner.State.Stopped) return
+        val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(N_ID, notification)
+    }
+
+    protected fun getState(): BLEScanner.State {
+        return scanner.states.value
+    }
 
     companion object {
         const val BLEScannerStatesAction = "sp.ax.blescanner.BLEScannerStatesAction"

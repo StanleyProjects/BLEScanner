@@ -10,8 +10,11 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,10 +22,12 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -52,9 +57,7 @@ private fun getPermissions(): Array<String> {
 internal fun MainScreen() {
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
-    val state = remember { BLEScannerReceivers.states(context = context) }
-        .collectAsStateWithLifecycle(null, minActiveState = Lifecycle.State.RESUMED)
-        .value
+    val state = App.scanner.states.collectAsState().value
     val permissions = remember { getPermissions() }
     val permissionsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { output ->
         println("[MainScreen]:permissions: " + output.map { (k, v) -> "$k: $v" })
@@ -73,9 +76,8 @@ internal fun MainScreen() {
         }
     }
     LaunchedEffect(Unit) {
-        val errors = BLEScannerReceivers.errors(context = context)
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            errors.collect { error ->
+            BLEScannerReceivers.errors(context = context).collect { error ->
                 when (error) {
                     is SecurityException -> {
                         permissionsLauncher.launch(permissions)
@@ -107,45 +109,62 @@ internal fun MainScreen() {
         }
     }
     LaunchedEffect(Unit) {
-        val devices = BLEScannerReceivers.devices(context = context)
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            devices.collect { device ->
+            BLEScannerReceivers.devices(context = context).collect { device ->
                 val n1 = String.format(Locale.US, "%02x", device.bytes[13].toInt() and 0xff)
                 val n2 = device.bytes[18].toInt() and 0xFF shl 8 or (device.bytes[19].toInt() and 0xFF)
                 println("[MainScreen]:device: ${device.address} [13: $n1, $n2] ${device.name}")
             }
         }
     }
-    LaunchedEffect(Unit) {
-        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            states<ScannerService>(context = context)
-        }
-    }
+    val theme = App.themes.collectAsState().value
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(theme.background),
     ) {
-        val enabled = state == BLEScanner.State.Started || state == BLEScanner.State.Stopped
-        val text = when (state) {
-            BLEScanner.State.Started -> "stop"
-            BLEScanner.State.Stopped -> "start"
-            else -> "..."
-        }
-        BasicText(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .clickable(enabled = enabled) {
-                    when (state) {
-                        BLEScanner.State.Started -> stop<ScannerService>(context = context)
-                        BLEScanner.State.Stopped -> start<ScannerService>(context = context)
-                        else -> {
-                            // noop
+        Column(
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            Spacer(Modifier.weight(1f))
+            val enabled = state == BLEScanner.State.Started || state == BLEScanner.State.Stopped
+            val text = when (state) {
+                BLEScanner.State.Started -> "stop"
+                BLEScanner.State.Stopped -> "start"
+                else -> "..."
+            }
+            BasicText(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clickable(enabled = enabled) {
+                        when (state) {
+                            BLEScanner.State.Started -> stop<ScannerService>(context = context)
+                            BLEScanner.State.Stopped -> start<ScannerService>(context = context)
+                            else -> {
+                                // noop
+                            }
                         }
                     }
-                }
-                .wrapContentSize()
-                .align(Alignment.Center),
-            text = text,
-        )
+                    .wrapContentSize(),
+                text = text,
+                style = TextStyle(color = theme.text),
+            )
+            BasicText(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clickable {
+                        App.themes.value = if (theme == Theme.Light) {
+                            Theme.Dark
+                        } else {
+                            Theme.Light
+                        }
+                    }
+                    .wrapContentSize(),
+                text = "theme",
+                style = TextStyle(color = theme.text),
+            )
+        }
     }
 }
