@@ -48,6 +48,7 @@ abstract class BLEScannerService(
                     }
                     BLEScanner.State.Stopped -> {
                         stopForeground(STOP_FOREGROUND_REMOVE)
+                        nm.cancel(N_ID)
                         stopSelf()
                     }
                     else -> {
