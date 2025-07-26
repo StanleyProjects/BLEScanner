@@ -167,6 +167,7 @@ class RealBLEScanner(
             val timeNow = now()
             val timeDiff = timeNow - timeLastResult
             if (timeDiff > timeout) {
+                logger.warning("I have not heard any devices in $timeout. So I am restarting.")
                 mutex.withLock {
                     restartScan()
                     timeLastResult = now()
@@ -178,12 +179,21 @@ class RealBLEScanner(
     }
 
     private suspend fun restartScan() {
-        if (states.value != BLEScanner.State.Started) return // todo
+        val state = _states.value
+        if (state != BLEScanner.State.Started) {
+            logger.debug("restarting cancelled (state: $state)")
+            return
+        }
         _states.value = BLEScanner.State.Stopping
-        val callback = scanCallback.getAndSet(null) ?: return
+        val callback = scanCallback.getAndSet(null)
+        if (callback == null) {
+            logger.debug("restarting cancelled (no callback)")
+            return
+        }
         try {
             stopScan(callback = callback)
         } catch (error: Throwable) {
+            logger.warning("restarting: stopping error: $error")
             _states.value = BLEScanner.State.Stopped
             _errors.emit(error)
             return
@@ -192,6 +202,7 @@ class RealBLEScanner(
         try {
             startScan(callback = callback)
         } catch (error: Throwable) {
+            logger.warning("restarting: starting error: $error")
             _states.value = BLEScanner.State.Stopped
             _errors.emit(error)
             return
@@ -223,12 +234,16 @@ class RealBLEScanner(
     }
 
     private suspend fun start(callback: InternalScanCallback) {
-        if (states.value != BLEScanner.State.Stopped) return // todo
+        val state = _states.value
+        if (state != BLEScanner.State.Stopped) {
+            logger.debug("starting cancelled (state: $state)")
+            return
+        }
         _states.value = BLEScanner.State.Starting
         try {
             startScan(callback = callback)
         } catch (error: Throwable) {
-            logger.warning("start scan error: $error")
+            logger.warning("starting error: $error")
             _states.value = BLEScanner.State.Stopped
             _errors.emit(error)
             return
@@ -273,6 +288,7 @@ class RealBLEScanner(
             try {
                 stopScan(callback = callback)
             } catch (error: Throwable) {
+                logger.warning("stopping error: $error")
                 _errors.emit(error)
             }
         }
