@@ -6,8 +6,8 @@ import kotlinx.coroutines.flow.StateFlow
 interface BLEScanner {
     enum class State {
         Stopped,
-        Starting,
         Stopping,
+        Starting,
         Started,
     }
 

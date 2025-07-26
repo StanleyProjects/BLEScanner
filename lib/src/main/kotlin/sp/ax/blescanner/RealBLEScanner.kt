@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -68,6 +69,14 @@ class RealBLEScanner(
             when (intent.action) {
                 BluetoothAdapter.ACTION_STATE_CHANGED -> {
                     val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+                    val text = when (state) {
+                        BluetoothAdapter.STATE_OFF -> "off"
+                        BluetoothAdapter.STATE_ON -> "on"
+                        BluetoothAdapter.STATE_TURNING_OFF -> "turning off"
+                        BluetoothAdapter.STATE_TURNING_ON -> "turning on"
+                        else -> state.toString()
+                    }
+                    logger.info("bluetooth adapter state: $text")
                     when (state) {
                         BluetoothAdapter.STATE_OFF -> stop()
                     }
@@ -79,6 +88,7 @@ class RealBLEScanner(
                         if (name != LocationManager.GPS_PROVIDER) return
                     }
                     val isLocationEnabled = lm.isProviderEnabled(LocationManager.GPS_PROVIDER)
+                    logger.info("gps enabled: $isLocationEnabled")
                     if (!isLocationEnabled) stop()
                 }
             }
@@ -89,22 +99,12 @@ class RealBLEScanner(
         it.addAction(LocationManager.PROVIDERS_CHANGED_ACTION)
     }
 
-    private fun onStates(oldState: BLEScanner.State?, newState: BLEScanner.State) {
-        if (oldState == null) {
-            logger.info("new state: $newState")
-        } else if (oldState > newState) {
-            val message = """
-                    * $oldState
-                  *
-                * $newState
-            """.trimIndent()
+    private fun onStates(oldState: BLEScanner.State, newState: BLEScanner.State) {
+        if (oldState > newState) {
+            val message = String.format("%-12S < %s", newState.name, oldState.name.lowercase())
             logger.info(message)
         } else {
-            val message = """
-                * $oldState
-                  *
-                    * $newState
-            """.trimIndent()
+            val message = String.format("%-12s > %S", oldState.name.lowercase(), newState.name)
             logger.info(message)
         }
     }
@@ -112,21 +112,19 @@ class RealBLEScanner(
     init {
         coroutineScope.launch {
             withContext(default) {
-                var state: BLEScanner.State? = null
-                _states.collect { newState ->
+                var state: BLEScanner.State = _states.value
+                _states.drop(1).collect { newState ->
                     val oldState = state
                     state = newState
                     onStates(oldState = oldState, newState = newState)
-                    when (newState) {
-                        BLEScanner.State.Starting -> register(
+                    if (oldState < BLEScanner.State.Starting && newState >= BLEScanner.State.Starting) {
+                        register(
                             context = context,
                             receivers = receivers,
                             filters = intentFilters,
                         )
-                        BLEScanner.State.Stopping -> context.unregisterReceiver(receivers)
-                        else -> {
-                            // noop
-                        }
+                    } else if (oldState > BLEScanner.State.Stopping && newState < BLEScanner.State.Starting) {
+                        context.unregisterReceiver(receivers)
                     }
                 }
             }
@@ -230,6 +228,7 @@ class RealBLEScanner(
         try {
             startScan(callback = callback)
         } catch (error: Throwable) {
+            logger.warning("start scan error: $error")
             _states.value = BLEScanner.State.Stopped
             _errors.emit(error)
             return

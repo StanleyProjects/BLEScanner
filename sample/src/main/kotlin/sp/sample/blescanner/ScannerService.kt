@@ -35,7 +35,6 @@ internal class ScannerService : BLEScannerService(
         }
         coroutineScope.launch {
             states.collect { state ->
-                println("[ScannerService]:state: $state") // todo
                 val notification = buildNotification(
                     channel = channel,
                     theme = App.themes.value,

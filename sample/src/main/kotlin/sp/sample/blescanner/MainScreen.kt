@@ -113,7 +113,7 @@ internal fun MainScreen() {
             BLEScannerReceivers.devices(context = context).collect { device ->
                 val n1 = String.format(Locale.US, "%02x", device.bytes[13].toInt() and 0xff)
                 val n2 = device.bytes[18].toInt() and 0xFF shl 8 or (device.bytes[19].toInt() and 0xFF)
-                println("[MainScreen]:device: ${device.address} [13: $n1, $n2] ${device.name}")
+//                println("[MainScreen]:device: ${device.address} [13: $n1, $n2] ${device.name}")
             }
         }
     }
