@@ -12,6 +12,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.collectIndexed
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.toCollection
@@ -164,6 +165,48 @@ internal class RealBLEScannerTest {
                             scanner.stop()
                         }
                     }
+                }
+            }
+        }
+    }
+
+    @Config(application = MockApplication::class, sdk = [Build.VERSION_CODES.P, Build.VERSION_CODES.TIRAMISU])
+    @Test
+    fun startingErrorTest() {
+        runBlocking {
+            withTimeout(6.seconds) {
+                val application = RuntimeEnvironment.getApplication()
+                val context: Context = application
+                //
+                val bm = context.getSystemService(BluetoothManager::class.java)
+                check(!bm.adapter.isEnabled)
+                //
+                setOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.BLUETOOTH_SCAN,
+                ).forEach { permission ->
+                    Shadows.shadowOf(application).grantPermissions(permission)
+                    check(application.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED)
+                }
+                onRealBLEScanner(
+                    main = coroutineContext,
+                    context = application,
+                ) { scanner ->
+                    launch(CoroutineName("errors")) {
+                        scanner.errors.take(1).collectIndexed { index, error ->
+                            when (index) {
+                                0 -> {
+                                    check(error is BLEScannerException)
+                                    assertEquals(BLEScannerException.Type.BTDisabled, error.type)
+                                }
+                                else -> error("Index $index is unexpected!")
+                            }
+                        }
+                    }.cancel {
+                        assertEquals("before start", BLEScanner.State.Stopped, scanner.states.value)
+                        scanner.start()
+                    }
+                    assertEquals("after start", BLEScanner.State.Stopped, scanner.states.value)
                 }
             }
         }
