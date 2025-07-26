@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -35,6 +36,7 @@ class RealBLEScanner(
     private val default: CoroutineContext,
     private val context: Context,
     private val timeout: Duration,
+    private val logger: BLEScannerLogger,
 ) : BLEScanner {
     private val _states = MutableStateFlow<BLEScanner.State>(BLEScanner.State.Stopped)
     override val states = _states.asStateFlow()
@@ -67,6 +69,14 @@ class RealBLEScanner(
             when (intent.action) {
                 BluetoothAdapter.ACTION_STATE_CHANGED -> {
                     val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+                    val text = when (state) {
+                        BluetoothAdapter.STATE_OFF -> "off"
+                        BluetoothAdapter.STATE_ON -> "on"
+                        BluetoothAdapter.STATE_TURNING_OFF -> "turning off"
+                        BluetoothAdapter.STATE_TURNING_ON -> "turning on"
+                        else -> state.toString()
+                    }
+                    logger.info("bluetooth adapter state: $text")
                     when (state) {
                         BluetoothAdapter.STATE_OFF -> stop()
                     }
@@ -78,6 +88,7 @@ class RealBLEScanner(
                         if (name != LocationManager.GPS_PROVIDER) return
                     }
                     val isLocationEnabled = lm.isProviderEnabled(LocationManager.GPS_PROVIDER)
+                    logger.info("gps enabled: $isLocationEnabled")
                     if (!isLocationEnabled) stop()
                 }
             }
@@ -88,28 +99,32 @@ class RealBLEScanner(
         it.addAction(LocationManager.PROVIDERS_CHANGED_ACTION)
     }
 
+    private fun onStates(oldState: BLEScanner.State, newState: BLEScanner.State) {
+        if (oldState > newState) {
+            val message = String.format("%-12S < %s", newState.name, oldState.name.lowercase())
+            logger.info(message)
+        } else {
+            val message = String.format("%-12s > %S", oldState.name.lowercase(), newState.name)
+            logger.info(message)
+        }
+    }
+
     init {
         coroutineScope.launch {
             withContext(default) {
-                states.collect { state ->
-                    when (state) {
-                        BLEScanner.State.Starting -> {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                context.registerReceiver(
-                                    receivers,
-                                    intentFilters,
-                                    Context.RECEIVER_NOT_EXPORTED,
-                                )
-                            } else {
-                                context.registerReceiver(receivers, intentFilters)
-                            }
-                        }
-                        BLEScanner.State.Stopping -> {
-                            context.unregisterReceiver(receivers)
-                        }
-                        else -> {
-                            // noop
-                        }
+                var state: BLEScanner.State = _states.value
+                _states.drop(1).collect { newState ->
+                    val oldState = state
+                    state = newState
+                    onStates(oldState = oldState, newState = newState)
+                    if (oldState < BLEScanner.State.Starting && newState >= BLEScanner.State.Starting) {
+                        register(
+                            context = context,
+                            receivers = receivers,
+                            filters = intentFilters,
+                        )
+                    } else if (oldState > BLEScanner.State.Stopping && newState < BLEScanner.State.Starting) {
+                        context.unregisterReceiver(receivers)
                     }
                 }
             }
@@ -152,6 +167,7 @@ class RealBLEScanner(
             val timeNow = now()
             val timeDiff = timeNow - timeLastResult
             if (timeDiff > timeout) {
+                logger.warning("I have not heard any devices in $timeout. So I am restarting.")
                 mutex.withLock {
                     restartScan()
                     timeLastResult = now()
@@ -163,12 +179,21 @@ class RealBLEScanner(
     }
 
     private suspend fun restartScan() {
-        if (states.value != BLEScanner.State.Started) return // todo
+        val state = _states.value
+        if (state != BLEScanner.State.Started) {
+            logger.debug("restarting cancelled (state: $state)")
+            return
+        }
         _states.value = BLEScanner.State.Stopping
-        val callback = scanCallback.getAndSet(null) ?: return
+        val callback = scanCallback.getAndSet(null)
+        if (callback == null) {
+            logger.debug("restarting cancelled (no callback)")
+            return
+        }
         try {
             stopScan(callback = callback)
         } catch (error: Throwable) {
+            logger.warning("restarting: stopping error: $error")
             _states.value = BLEScanner.State.Stopped
             _errors.emit(error)
             return
@@ -177,6 +202,7 @@ class RealBLEScanner(
         try {
             startScan(callback = callback)
         } catch (error: Throwable) {
+            logger.warning("restarting: starting error: $error")
             _states.value = BLEScanner.State.Stopped
             _errors.emit(error)
             return
@@ -208,11 +234,16 @@ class RealBLEScanner(
     }
 
     private suspend fun start(callback: InternalScanCallback) {
-        if (states.value != BLEScanner.State.Stopped) return // todo
+        val state = _states.value
+        if (state != BLEScanner.State.Stopped) {
+            logger.debug("starting cancelled (state: $state)")
+            return
+        }
         _states.value = BLEScanner.State.Starting
         try {
             startScan(callback = callback)
         } catch (error: Throwable) {
+            logger.warning("starting error: $error")
             _states.value = BLEScanner.State.Stopped
             _errors.emit(error)
             return
@@ -246,13 +277,18 @@ class RealBLEScanner(
     }
 
     private suspend fun stopScan() {
-        if (states.value != BLEScanner.State.Started) return // todo
+        val state = _states.value
+        if (state != BLEScanner.State.Started) {
+            logger.debug("stopping cancelled (state: $state)")
+            return
+        }
         _states.value = BLEScanner.State.Stopping
         val callback = scanCallback.getAndSet(null)
         if (callback != null) {
             try {
                 stopScan(callback = callback)
             } catch (error: Throwable) {
+                logger.warning("stopping error: $error")
                 _errors.emit(error)
             }
         }

@@ -18,30 +18,30 @@ internal class MockApplication : Application() {
         filter: IntentFilter?,
         flags: Int,
     ): Intent? {
-        if (filter == null) TODO()
-        if (filter.countActions() != 1) TODO()
-        val action = filter.actionsIterator().next()
-        if (receiver == null) TODO()
-        receivers[action] = receiver
-        return null
+        return registerReceiver(
+            receiver = receiver,
+            filter = filter,
+        )
     }
 
     override fun registerReceiver(
         receiver: BroadcastReceiver?,
         filter: IntentFilter?,
     ): Intent? {
-        if (filter == null) TODO()
-        if (filter.countActions() != 1) TODO()
-        val action = filter.actionsIterator().next()
-        if (receiver == null) TODO()
-        receivers[action] = receiver
+        if (filter == null) TODO("MockApplication:registerReceiver:no filter!")
+//        if (filter.countActions() != 1) TODO("MockApplication:registerReceiver:${filter.countActions()} actions!")
+        if (filter.countActions() == 0) TODO("MockApplication:registerReceiver:${filter.countActions()} actions!")
+//        val action = filter.actionsIterator().next()
+        val key = filter.actionsIterator().asSequence().joinToString { it }
+        if (receiver == null) TODO("MockApplication:registerReceiver:no receiver!")
+        receivers[key] = receiver
         return null
     }
 
     override fun sendBroadcast(intent: Intent?) {
-        if (intent == null) TODO()
-        if (intent.getPackage() != packageName) TODO()
-        val receiver = receivers[intent.action] ?: TODO()
+        if (intent == null) TODO("MockApplication:sendBroadcast:no intent!")
+        if (intent.getPackage() != packageName) TODO("MockApplication:sendBroadcast:package: ${intent.getPackage()}!")
+        val receiver = receivers.entries.single { (key, _) -> key.contains(intent.action.orEmpty()) }.value
         receiver.onReceive(this, intent)
     }
 
@@ -52,6 +52,6 @@ internal class MockApplication : Application() {
                 return
             }
         }
-        TODO()
+        TODO("MockApplication:unregisterReceiver(${receiver?.hashCode()}):no receiver!")
     }
 }

@@ -35,10 +35,7 @@ abstract class BLEScannerService(
         }
         coroutineScope.launch {
             scanner.states.drop(1).collect { state ->
-                val broadcast = Intent(BLEScannerStatesAction)
-                broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
-                broadcast.putExtra("state", state.name)
-                sendBroadcast(broadcast)
+                sendBroadcast(getBroadcast(state = state))
                 when (state) {
                     BLEScanner.State.Started -> {
                         val notification = onStartNotification()
@@ -51,6 +48,7 @@ abstract class BLEScannerService(
                     }
                     BLEScanner.State.Stopped -> {
                         stopForeground(STOP_FOREGROUND_REMOVE)
+                        nm.cancel(N_ID)
                         stopSelf()
                     }
                     else -> {
@@ -61,20 +59,12 @@ abstract class BLEScannerService(
         }
         coroutineScope.launch {
             scanner.errors.collect { error ->
-                val broadcast = Intent(BLEScannerErrorsAction)
-                broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
-                broadcast.putExtra("error", error)
-                sendBroadcast(broadcast)
+                sendBroadcast(getBroadcast(error = error))
             }
         }
         coroutineScope.launch {
             scanner.devices.collect { device ->
-                val broadcast = Intent(BLEScannerDevicesAction)
-                broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
-                broadcast.putExtra("name", device.name)
-                broadcast.putExtra("address", device.address)
-                broadcast.putExtra("bytes", device.bytes)
-                sendBroadcast(broadcast)
+                sendBroadcast(getBroadcast(device = device))
             }
         }
     }
@@ -87,21 +77,14 @@ abstract class BLEScannerService(
         when (intent?.action) {
             BLEScannerStartAction -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                    val error = SecurityException("no permission: ${Manifest.permission.POST_NOTIFICATIONS}")
-                    val broadcast = Intent(BLEScannerErrorsAction)
-                    broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
-                    broadcast.putExtra("error", error)
-                    sendBroadcast(broadcast)
+                    sendBroadcast(getBroadcast(error = SecurityException("no permission: ${Manifest.permission.POST_NOTIFICATIONS}")))
                 } else {
                     scanner.start()
                 }
             }
             BLEScannerStopAction -> scanner.stop()
             BLEScannerStatesAction -> {
-                val broadcast = Intent(BLEScannerStatesAction)
-                broadcast.setPackage(packageName) // https://stackoverflow.com/a/76920719/4398606
-                broadcast.putExtra("state", scanner.states.value.name)
-                sendBroadcast(broadcast)
+                sendBroadcast(getBroadcast(state = scanner.states.value))
             }
         }
         return START_NOT_STICKY
