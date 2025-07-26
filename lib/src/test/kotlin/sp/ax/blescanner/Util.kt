@@ -68,6 +68,7 @@ internal suspend fun onRealBLEScanner(
         default = default + job,
         context = context,
         timeout = timeout,
+        logger = MockBLEScannerLogger,
     )
     block(scanner)
     job.cancel()

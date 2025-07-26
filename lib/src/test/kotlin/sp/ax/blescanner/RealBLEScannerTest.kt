@@ -7,7 +7,9 @@ import android.bluetooth.BluetoothManager
 import android.bluetooth.le.ScanRecord
 import android.bluetooth.le.ScanResult
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.take
@@ -24,6 +26,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows
+import org.robolectric.annotation.Config
 import kotlin.time.Duration.Companion.seconds
 
 @RunWith(RobolectricTestRunner::class)
@@ -33,10 +36,13 @@ internal class RealBLEScannerTest {
         Shadows.shadowOf(bm.adapter).setState(BluetoothAdapter.STATE_ON)
         check(bm.adapter.isEnabled)
         Shadows.shadowOf(application).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION)
+        Shadows.shadowOf(application).grantPermissions(Manifest.permission.BLUETOOTH_SCAN)
         check(application.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+        check(application.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED)
         return bm
     }
 
+    @Config(application = MockApplication::class, sdk = [Build.VERSION_CODES.P, Build.VERSION_CODES.TIRAMISU])
     @Test
     fun startTest() {
         runTest(timeout = 6.seconds) {
@@ -62,6 +68,7 @@ internal class RealBLEScannerTest {
         }
     }
 
+    @Config(application = MockApplication::class, sdk = [Build.VERSION_CODES.P, Build.VERSION_CODES.TIRAMISU])
     @Test
     fun startStopTest() {
         runTest(timeout = 6.seconds) {
@@ -100,6 +107,7 @@ internal class RealBLEScannerTest {
         return method.invoke(null, argument) as T
     }
 
+    @Config(application = MockApplication::class, sdk = [Build.VERSION_CODES.P, Build.VERSION_CODES.TIRAMISU])
     @Test
     fun devicesTest() {
         runBlocking {
@@ -154,6 +162,59 @@ internal class RealBLEScannerTest {
                             }.collect()
                         }.join {
                             scanner.stop()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Config(application = MockApplication::class, sdk = [Build.VERSION_CODES.P, Build.VERSION_CODES.TIRAMISU])
+    @Test
+    fun bluetoothTest() {
+        runBlocking {
+            withTimeout(6.seconds) {
+                val application = RuntimeEnvironment.getApplication()
+                val context: Context = application
+                //
+                val bm = context.getSystemService(BluetoothManager::class.java)
+                Shadows.shadowOf(bm.adapter).setState(BluetoothAdapter.STATE_ON)
+                check(bm.adapter.isEnabled)
+                //
+                setOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.BLUETOOTH_SCAN,
+                ).forEach { permission ->
+                    Shadows.shadowOf(application).grantPermissions(permission)
+                    check(application.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED)
+                }
+                onRealBLEScanner(
+                    main = coroutineContext,
+                    context = application,
+                ) { scanner ->
+                    launch(CoroutineName("errors")) {
+                        scanner.errors.take(1).collect { error ->
+                            error("Error $error is unexpected!")
+                        }
+                    }.cancel {
+                        assertEquals("before start", BLEScanner.State.Stopped, scanner.states.value)
+                        launch(CoroutineName("start")) {
+                            scanner.states.takeWhile { state ->
+                                state != BLEScanner.State.Started
+                            }.collect()
+                        }.join {
+                            scanner.start()
+                        }
+                        assertEquals("after start", BLEScanner.State.Started, scanner.states.value)
+                        launch(CoroutineName("start")) {
+                            scanner.states.takeWhile { state ->
+                                state != BLEScanner.State.Stopped
+                            }.collect()
+                        }.join {
+                            val broadcast = Intent(BluetoothAdapter.ACTION_STATE_CHANGED)
+                            broadcast.setPackage(context.packageName) // https://stackoverflow.com/a/76920719/4398606
+                            broadcast.putExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.STATE_OFF)
+                            context.sendBroadcast(broadcast)
                         }
                     }
                 }
