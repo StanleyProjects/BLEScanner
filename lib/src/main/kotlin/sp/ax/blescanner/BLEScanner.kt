@@ -5,10 +5,10 @@ import kotlinx.coroutines.flow.StateFlow
 
 interface BLEScanner {
     enum class State {
-        Started,
+        Stopped,
         Starting,
         Stopping,
-        Stopped,
+        Started,
     }
 
     val states: StateFlow<State>

@@ -63,16 +63,4 @@ object BLEScannerReceivers {
             }
         }
     }
-
-    private fun register(context: Context, receivers: BroadcastReceiver, filters: IntentFilter) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(
-                receivers,
-                filters,
-                Context.RECEIVER_NOT_EXPORTED,
-            )
-        } else {
-            context.registerReceiver(receivers, filters)
-        }
-    }
 }
