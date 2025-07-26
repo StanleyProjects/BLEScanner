@@ -77,7 +77,7 @@ abstract class BLEScannerService(
         when (intent?.action) {
             BLEScannerStartAction -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                    sendBroadcast(getBroadcast(error =  SecurityException("no permission: ${Manifest.permission.POST_NOTIFICATIONS}")))
+                    sendBroadcast(getBroadcast(error = SecurityException("no permission: ${Manifest.permission.POST_NOTIFICATIONS}")))
                 } else {
                     scanner.start()
                 }
