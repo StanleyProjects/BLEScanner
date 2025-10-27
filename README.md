@@ -5,9 +5,9 @@ BLE scanner for Android.
 
 ## Unstable
 
-![version](https://img.shields.io/static/v1?label=version&message=0.3.0u-SNAPSHOT&labelColor=212121&color=2962ff&style=flat)
-
-- [Maven](https://s01.oss.sonatype.org/content/repositories/snapshots/com/github/kepocnhh/BLEScanner/0.3.0u-SNAPSHOT)
+> GitHub [0.3.1u-SNAPSHOT](https://github.com/StanleyProjects/BLEScanner/releases/tag/0.3.1u-SNAPSHOT) release
+>
+> Maven [metadata](https://central.sonatype.com/repository/maven-snapshots/com/github/kepocnhh/BLEScanner/maven-metadata.xml)
 
 ### Build
 ```
@@ -17,11 +17,11 @@ $ gradle lib:assembleUnstableDebug
 ### Import
 ```kotlin
 repositories {
-    maven("https://s01.oss.sonatype.org/content/repositories/snapshots")
+    maven("https://central.sonatype.com/repository/maven-snapshots")
 }
 
 dependencies {
-    implementation("com.github.kepocnhh:BLEScanner:0.3.0u-SNAPSHOT")
+    implementation("com.github.kepocnhh:BLEScanner:0.3.1u-SNAPSHOT")
 }
 ```
 
